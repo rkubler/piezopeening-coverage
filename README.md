@@ -8,7 +8,7 @@ Interactive educational tool showing how surface coverage builds up in
 the surface at frequency *f* while a CNC machine moves it along straight lines
 at the feed velocity *V_feed*.
 
-**▶ Live simulator:** https://YOUR-USERNAME.github.io/piezopeening-coverage/
+**▶ Live simulator:** https://rkubler.github.io/piezopeening-coverage/
 
 ## What the simulator shows
 - Top view of the treated zone: tool path and every dent footprint
