@@ -52,4 +52,4 @@ October 2026. All content was reviewed by the author.
 Code: MIT, see [LICENSE](LICENSE). Documentation: CC BY 4.0.
 
 ## Cite as
-Kubler, R. (2026). *Piezopeening Coverage Simulator*. Arts et Métiers Institute of Technology. Zenodo. DOI: [to add]
+Kubler, R. (2026). *Piezopeening Coverage Simulator*. Arts et Métiers Institute of Technology. Zenodo. DOI: https://doi.org/10.5281/zenodo.23244211
