@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piezopeening Coverage Simulator</title>
+<meta name="description" content="Interactive educational simulator of piezopeening coverage: spherical tool driven by a piezoelectric actuator on CNC lines, dent footprints, hit-count maps, comparison with random shot peening.">
+<meta name="author" content="Dr Régis Kubler, Arts et Métiers Institute of Technology">
+<meta property="og:title" content="Piezopeening Coverage Simulator">
+<meta property="og:description" content="Parametric simulator of dent coverage in piezopeening, by Dr Régis Kubler (Arts et Métiers Institute of Technology).">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f5a96'/%3E%3Crect y='40' width='64' height='24' fill='%23c9d2dc'/%3E%3Cellipse cx='32' cy='46' rx='14' ry='5' fill='%237d8da0'/%3E%3Ccircle cx='32' cy='22' r='12' fill='%23f08a4b'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: test bench — top view of the treated zone (left) + tool kinematics (right), then impact map / distribution, then parameters and coverage-vs-step-over */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --ink:#17202a; --muted:#5b6672; --line:#d3d9df;
+  --accent:#d4621c; --theory:#1f5a96; --bare:#e5484d; --soft:#f6f8fa; --random:#8a5bb8;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11161c; --surface:#19212a; --ink:#e6ebf0; --muted:#9aa6b2; --line:#2b3642;
+  --accent:#f08a4b; --theory:#6aa7e6; --bare:#ff6b6f; --soft:#1e2731; --random:#b48ae0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161c; --surface:#19212a; --ink:#e6ebf0; --muted:#9aa6b2; --line:#2b3642;
+  --accent:#f08a4b; --theory:#6aa7e6; --bare:#ff6b6f; --soft:#1e2731; --random:#b48ae0; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 40px;margin:0}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header h1{font-family:var(--f-display);font-weight:800;font-size:clamp(1.5rem,3vw,2.1rem);letter-spacing:-.01em;margin:0;text-wrap:balance}
+header p{margin:.3rem 0 0;color:var(--muted);max-width:80ch}
+header p.byline{margin:0 0 .35rem;font-size:13px}
+header p.byline b{color:var(--ink);font-weight:600}
+.formula{font-family:var(--f-mono);color:var(--ink);white-space:nowrap}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+button{font:600 14px var(--f-body);border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:8px;padding:7px 13px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;min-width:7.5em}
+select{font:500 14px var(--f-body);background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.bar label{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}
+.bar .sep{flex:1}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.panel h2{font-family:var(--f-display);font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+canvas{display:block;width:100%;border-radius:6px;max-width:100%}
+#top{aspect-ratio:1/1}
+#side{aspect-ratio:2/1}
+#heat{aspect-ratio:1/1;image-rendering:pixelated;cursor:crosshair}
+.phase{font-size:14px;min-height:3em;background:var(--soft);border-radius:8px;padding:8px 10px}
+.phase b{color:var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);align-items:center}
+.sw{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.reads{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.read{background:var(--soft);border-radius:8px;padding:8px 10px}
+.read .k{font-size:12px;color:var(--muted);line-height:1.3}
+.read .v{font-family:var(--f-mono);font-size:17px;font-weight:500;font-variant-numeric:tabular-nums}
+.read.hl .v{color:var(--accent)}
+.read.th .v{color:var(--theory)}
+svg.chart{width:100%;height:auto;display:block}
+svg.chart text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.params{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px 18px}
+.param{display:flex;flex-direction:column;gap:4px}
+.param .row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px}
+.param input[type=number]{width:6.5em;font:500 14px var(--f-mono);background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px;text-align:right}
+.param .u{font-family:var(--f-mono);font-size:13px;color:var(--muted);min-width:3.6em}
+.param .in{display:flex;align-items:center;gap:6px}
+.param input[type=range]{width:100%;accent-color:var(--accent)}
+.param select{width:100%}
+.note{font-size:13px;color:var(--muted);margin:0}
+.warn{font-size:13px;color:var(--bare);margin:0;font-weight:600}
+.scale{display:flex;flex-wrap:wrap;gap:3px;align-items:center;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.scale span.c{display:inline-flex;flex-direction:column;align-items:center;gap:1px}
+.scale span.c i{display:block;width:15px;height:11px;border-radius:2px}
+.stack{display:flex;height:26px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.stack i{display:block;height:100%;transition:width .2s}
+.cov4{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.cov4 .read .k{display:flex;align-items:center;gap:6px}
+#rheat{aspect-ratio:1/1;image-rendering:pixelated;cursor:crosshair}
+table.cmp{width:100%;border-collapse:collapse;font-size:14px}
+table.cmp th,table.cmp td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+table.cmp th:first-child,table.cmp td:first-child{text-align:left}
+table.cmp td{font-family:var(--f-mono)}
+table.cmp td:first-child{font-family:var(--f-body)}
+table.cmp thead th{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.tw{overflow-x:auto}
+#rhover{font-family:var(--f-mono);font-size:13px;min-height:1.4em}
+ol.chain{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;counter-reset:st}
+ol.chain li{counter-increment:st;display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;padding:7px 10px;border-radius:8px;background:var(--soft)}
+ol.chain li::before{content:counter(st);font-family:var(--f-mono);font-weight:500;color:var(--muted);grid-row:span 2}
+.chain .t{font-weight:600}
+.chain .val{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.chain .f{grid-column:2 / span 2;font-family:var(--f-mono);font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <p class="byline"><b>Dr Régis Kubler</b>, Arts et Métiers Institute of Technology · Developed with the assistance of Claude Opus 5.5 (Anthropic), October 2026</p>
+  <h1>Piezopeening Coverage Simulator</h1>
+  <p>A piezoelectric actuator drives a spherical tool up and down at frequency f while the CNC machine moves it along straight lines at the feed velocity V<sub>feed</sub>. The tool tip penetration follows <span class="formula">h(t) = U<sub>off</sub> + a·sin(2πf·t)</span>; each time h &gt; 0 the sphere indents the surface. The page traces every dent, counts how many times each point is hit and measures the coverage.</p>
+</header>
+
+<div class="bar" role="toolbar" aria-label="Animation controls">
+  <button id="play" class="primary">▶ Play</button>
+  <button id="step">+1 line</button>
+  <button id="all">Run all</button>
+  <button id="reset">Restart</button>
+  <span class="sep"></span>
+  <label for="speed">Animation speed
+    <select id="speed"><option value="0.25">×0.25</option><option value="0.5">×0.5</option><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option></select></label>
+  <label><input type="checkbox" id="bare"> Show unimpacted surface</label>
+</div>
+
+<div class="grid">
+  <section class="panel" aria-label="Top view">
+    <h2>Top view of the treated zone</h2>
+    <canvas id="top" aria-label="Top view: tool path and dents"></canvas>
+    <div class="legend">
+      <span><span class="sw" style="background:rgba(31,90,150,.55)"></span>dent footprints (colour = line)</span>
+      <span><span class="sw" style="background:var(--accent);border-radius:50%"></span>tool contact</span>
+      <span><span class="sw" style="border:2px solid var(--bare);background:none"></span>measured zone</span>
+    </div>
+    <div class="phase" id="phase" aria-live="polite"></div>
+    <div class="reads">
+      <div class="read"><div class="k">Lines done / total</div><div class="v" id="rLines">0</div></div>
+      <div class="read"><div class="k">Impacts made</div><div class="v" id="rImp">0</div></div>
+      <div class="read hl"><div class="k">Measured coverage</div><div class="v" id="rCov">0 %</div></div>
+      <div class="read th"><div class="k">Predicted coverage (1 pass, lattice)</div><div class="v" id="rCovTh">–</div></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Tool kinematics">
+    <h2>Tool kinematics (side view)</h2>
+    <canvas id="side" aria-label="Tool tip penetration versus time"></canvas>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--theory);height:3px"></span>tool tip h(t)</span>
+      <span><span class="sw" style="background:var(--accent)"></span>in contact (h &gt; 0)</span>
+      <span><span class="sw" style="background:#9aa6b3"></span>material</span>
+    </div>
+    <div class="reads">
+      <div class="read"><div class="k">Impact spacing s = V/f</div><div class="v" id="kS">–</div></div>
+      <div class="read"><div class="k">Max penetration h<sub>max</sub></div><div class="v" id="kH">–</div></div>
+      <div class="read hl"><div class="k">Dent radius r</div><div class="v" id="kR">–</div></div>
+      <div class="read"><div class="k">Contact time per cycle</div><div class="v" id="kTc">–</div></div>
+      <div class="read"><div class="k">Normal impact velocity v<sub>n</sub> (actuator)</div><div class="v" id="kVi">–</div></div>
+      <div class="read"><div class="k">Tangential velocity v<sub>t</sub> (feed)</div><div class="v" id="kVt">–</div></div>
+      <div class="read hl"><div class="k">Resultant impact velocity |v|</div><div class="v" id="kVr">–</div></div>
+      <div class="read hl"><div class="k">Impact angle from the surface normal</div><div class="v" id="kAng">–</div></div>
+      <div class="read"><div class="k">Tool travel during contact</div><div class="v" id="kSm">–</div></div>
+      <div class="read"><div class="k">Dent length L (along feed)</div><div class="v" id="kL">–</div></div>
+      <div class="read"><div class="k">Dent width W (across feed)</div><div class="v" id="kW">–</div></div>
+      <div class="read hl"><div class="k">Dent aspect ratio L / W</div><div class="v" id="kAR">–</div></div>
+      <div class="read"><div class="k">Footprint area A</div><div class="v" id="kA">–</div></div>
+      <div class="read th"><div class="k">Mean hits per point per pass</div><div class="v" id="kN">–</div></div>
+    </div>
+    <p class="warn" id="kWarn"></p>
+  </section>
+</div>
+
+<div class="grid">
+  <section class="panel" aria-label="Impact count map">
+    <h2>Map: how many times each point was hit</h2>
+    <canvas id="heat" aria-label="Map of the number of impacts per point"></canvas>
+    <div class="scale" id="scale"></div>
+    <div id="hover">Hover over the map to read the number of impacts at a point.</div>
+  </section>
+  <section class="panel" aria-label="Distribution">
+    <h2>Distribution: share of the surface hit k times</h2>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--accent)"></span>piezopeening (deterministic)</span>
+      <span><span class="sw" style="background:var(--random);border-radius:50%"></span>random impacts, same mean (Poisson)</span>
+    </div>
+    <svg class="chart" id="hist" viewBox="0 0 560 300" role="img" aria-label="Histogram of impacts per point"></svg>
+    <div class="reads">
+      <div class="read"><div class="k">Mean hits per point</div><div class="v" id="hMean">0</div></div>
+      <div class="read"><div class="k">Min / max hits</div><div class="v" id="hMM">–</div></div>
+      <div class="read hl"><div class="k">Never-hit surface</div><div class="v" id="hZero">100 %</div></div>
+    </div>
+    <h2>Share of the total surface by local coverage</h2>
+    <div class="stack" id="stack" role="img" aria-label="Share of the surface at 0, 100, 200 and 300 % or more local coverage"><i id="sb0"></i><i id="sb1"></i><i id="sb2"></i><i id="sb3"></i></div>
+    <div class="cov4">
+      <div class="read"><div class="k"><span class="sw" id="sw0"></span>0 % (no impact)</div><div class="v" id="lc0">–</div></div>
+      <div class="read"><div class="k"><span class="sw" id="sw1"></span>100 % (hit once)</div><div class="v" id="lc1">–</div></div>
+      <div class="read"><div class="k"><span class="sw" id="sw2"></span>200 % (hit twice)</div><div class="v" id="lc2">–</div></div>
+      <div class="read"><div class="k"><span class="sw" id="sw3"></span>300 % or more (≥ 3 hits)</div><div class="v" id="lc3">–</div></div>
+    </div>
+    <p class="note">Local coverage of a point = 100 % × number of times it has been hit. The four shares add up to 100 % of the measured zone; the global coverage is everything except the 0 % share.</p>
+    <p class="note">Piezopeening places impacts on a regular lattice, so the number of hits per point is far more uniform than with random shot peening. A random process with the same mean would leave the share shown by the purple dots untouched.</p>
+  </section>
+</div>
+
+<div class="grid">
+  <section class="panel" aria-label="Random process map">
+    <h2>Map: random process with the same mean</h2>
+    <canvas id="rheat" aria-label="Map of hits per point for random impacts with the same mean"></canvas>
+    <div id="rhover">Same zone, same dent shape and the same number of impacts per mm² as the piezopeening settings, but each impact is placed at random (as in shot peening). Final state after all passes.</div>
+    <div><button id="redraw">New random draw</button></div>
+  </section>
+  <section class="panel" aria-label="Comparison">
+    <h2>Piezopeening versus random impacts</h2>
+    <div class="tw"><table class="cmp">
+      <thead><tr><th>Measured zone</th><th>Piezopeening<br>(current state)</th><th>Random, same mean<br>(final state)</th></tr></thead>
+      <tbody>
+        <tr><td>Coverage</td><td id="d_cov">–</td><td id="r_cov">–</td></tr>
+        <tr><td>0 % local coverage (no impact)</td><td id="d_c0">–</td><td id="r_c0">–</td></tr>
+        <tr><td>100 % (hit once)</td><td id="d_c1">–</td><td id="r_c1">–</td></tr>
+        <tr><td>200 % (hit twice)</td><td id="d_c2">–</td><td id="r_c2">–</td></tr>
+        <tr><td>300 % or more (≥ 3 hits)</td><td id="d_c3">–</td><td id="r_c3">–</td></tr>
+        <tr><td>Mean hits per point</td><td id="d_mean">–</td><td id="r_mean">–</td></tr>
+        <tr><td>Standard deviation of hits</td><td id="d_sd">–</td><td id="r_sd">–</td></tr>
+        <tr><td>Min / max hits</td><td id="d_mm">–</td><td id="r_mm">–</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Click <b>Run all</b> to compare both processes at the same stage. Random impacts with mean λ leave about e<sup>−λ</sup> of the surface untouched and spread the hits widely (standard deviation ≈ √λ). Below the gap-free step-over, the piezopeening lattice covers everything with a much narrower spread of hits. Above it, the lattice leaves untreated strips between the lines that random impacts would have covered. The random column changes slightly from one draw to the next because the zone holds only a few hundred impacts.</p>
+  </section>
+</div>
+
+<div class="grid">
+  <section class="panel" aria-label="Parameters">
+    <h2>Parameters</h2>
+    <div class="params" id="params"></div>
+    <div><button id="defaults">Reset to default values</button></div>
+    <p class="note">Sign convention: h &gt; 0 means the tool tip is below the initial surface, in the material. U<sub>off</sub> &gt; 0 moves the median line of the oscillation into the material (h<sub>max</sub> = U<sub>off</sub> + a). If your offset is measured away from the part, enter a negative value. Changing a parameter restarts the simulation.</p>
+  </section>
+  <section class="panel" aria-label="Coverage versus step-over">
+    <h2>One-pass coverage versus step-over</h2>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--theory);height:3px"></span>piezopeening lattice</span>
+      <span><span class="sw" style="background:var(--random);height:3px"></span>random impacts, same density: 100·(1 − e<sup>−A/(s·p)</sup>)</span>
+      <span><span class="sw" style="background:var(--accent);border-radius:50%"></span>current setting</span>
+    </div>
+    <svg class="chart" id="pchart" viewBox="0 0 560 280" role="img" aria-label="Coverage versus step-over"></svg>
+    <ol class="chain" id="chain">
+      <li><span class="t">Spacing of impacts along a line</span><span class="val" id="c1"></span><span class="f">s = V<sub>feed</sub> / f</span></li>
+      <li><span class="t">Dent radius at maximum penetration</span><span class="val" id="c2"></span><span class="f">h<sub>max</sub> = η·(U<sub>off</sub> + a);  r = √(2R·h<sub>max</sub> − h<sub>max</sub>²), R = tool radius</span></li>
+      <li><span class="t">Footprint of one impact</span><span class="val" id="c3"></span><span class="f">union of the contact circles while the tool moves V·t<sub>c</sub> during the contact time t<sub>c</sub></span></li>
+      <li><span class="t">Impact velocity and angle</span><span class="val" id="c8"></span><span class="f">first contact when U<sub>off</sub> + a·sin θ = 0: v<sub>n</sub> = 2πf·√(a² − U<sub>off</sub>²);  v<sub>t</sub> = V<sub>feed</sub>;  |v| = √(v<sub>n</sub>² + v<sub>t</sub>²);  angle from normal = atan(v<sub>t</sub> / v<sub>n</sub>)</span></li>
+      <li><span class="t">Dent aspect ratio</span><span class="val" id="c7"></span><span class="f">W = 2r;  L = 2·max over the contact of (V·|t − t<sub>peak</sub>| + r(t));  ≈ round while V·t<sub>c</sub> ≪ 2r</span></li>
+      <li><span class="t">Mean hits per point per pass</span><span class="val" id="c4"></span><span class="f">λ = A / (s · p), p = step-over between lines</span></li>
+      <li><span class="t">Gap-free condition (circular dents)</span><span class="val" id="c5"></span><span class="f">(p/2)² + (s/2)² ≤ r²  (aligned lines); staggered lines tolerate a larger p</span></li>
+      <li><span class="t">Treatment rate</span><span class="val" id="c6"></span><span class="f">area per second = V<sub>feed</sub> · p; time for 1 cm² = 100 / (V<sub>feed</sub>·p)</span></li>
+    </ol>
+  </section>
+</div>
+
+<footer>
+  <span><b>Dr Régis Kubler</b>, Arts et Métiers Institute of Technology. Developed with the assistance of Claude Opus 5.5 (Anthropic), October 2026.</span>
+  <span>Educational kinematic model: rigid spherical tool with imposed sinusoidal motion, dent = trace of the sphere (no elastic recovery, actuator stiffness or material pile-up; use the penetration efficiency η to calibrate against measured dents). Code: MIT licence · Documentation: CC BY 4.0.</span>
+</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- parameters ---------- */
+const DEF={Dt:3, f:100, a:80, U:20, eta:1, V:1000, p:0.8, phi:0, path:"zigzag", N:1, poff:"none"};
+const SPEC=[
+ {k:"Dt",  lab:"Tool diameter D", u:"mm",    min:0.5, max:20,   step:0.1, d:1},
+ {k:"f",   lab:"Impact frequency f", u:"Hz", min:1,   max:500,  step:1,   d:0},
+ {k:"a",   lab:"Amplitude a", u:"µm",        min:1,   max:300,  step:1,   d:0},
+ {k:"U",   lab:"Offset of median line U_off", u:"µm", min:-300, max:300, step:1, d:0},
+ {k:"eta", lab:"Penetration efficiency η", u:"–", min:0.05, max:1, step:0.01, d:2},
+ {k:"V",   lab:"Feed velocity V_feed", u:"mm/min", min:50, max:20000, step:10, d:0},
+ {k:"p",   lab:"Step-over between lines p", u:"mm", min:0.02, max:5, step:0.01, d:2},
+ {k:"phi", lab:"Phase shift between lines", u:"°", min:0, max:360, step:5, d:0},
+ {k:"N",   lab:"Number of passes", u:"–", min:1, max:10, step:1, d:0},
+ {k:"path",lab:"Tool path", sel:[["zigzag","Zigzag (back and forth)"],["oneway","One way (same direction)"]]},
+ {k:"poff",lab:"Offset between passes", sel:[["none","None (same path)"],["half","Half pitch (p/2 and s/2)"]]}
+];
+const P=Object.assign({},DEF);
+const reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+const nf=(x,d)=>x.toLocaleString("en-GB",{minimumFractionDigits:d,maximumFractionDigits:d});
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ---------- kinematics and footprint ---------- */
+let K; // derived quantities (mm, s)
+function derive(){
+  const R=P.Dt/2, a=P.a/1000, U=P.U/1000, w=2*Math.PI*P.f, V=P.V/60, s=V/P.f;
+  const hmax=P.eta*(U+a);
+  let th1, th2, mode;
+  if(U+a<=0){ mode="none"; th1=th2=Math.PI/2; }
+  else if(U-a>=0){ mode="cont"; th1=-Math.PI/2; th2=3*Math.PI/2; }
+  else { mode="impact"; th1=Math.asin(Math.max(-1,Math.min(1,-U/a))); th2=Math.PI-th1; }
+  const tc=(th2-th1)/w;                      // contact time per cycle (s)
+  const vimp= mode==="impact" ? a*w*Math.cos(th1) : 0;  // mm/s at first contact
+  const hh=Math.min(hmax,R); const r=hmax>0?Math.sqrt(Math.max(0,2*R*hh-hh*hh)):0;
+  // footprint samples: offset along the line (relative to mid-contact) and contact radius
+  const NS= mode==="cont"?24:14, FP=[];
+  if(mode!=="none") for(let k=0;k<NS;k++){
+    const th=th1+(th2-th1)*(k+0.5)/NS, h=Math.min(R,P.eta*(U+a*Math.sin(th)));
+    if(h>0) FP.push({dx:(th-Math.PI/2)/w*V, r:Math.sqrt(2*R*h-h*h)});
+  }
+  if(mode!=="none") FP.push({dx:0,r:r});
+  let ext=0; for(const q of FP) ext=Math.max(ext,Math.abs(q.dx)+q.r);
+  let halfL=0; if(mode!=="none") for(let k=0;k<=3000;k++){ const th=th1+(th2-th1)*k/3000, h=Math.min(R,P.eta*(U+a*Math.sin(th))); if(h>0){ const v=Math.abs((th-Math.PI/2)/w*V)+Math.sqrt(2*R*h-h*h); if(v>halfL) halfL=v; } }
+  if(mode==="cont") halfL=Infinity;
+  // single-footprint half-width profile and area
+  const w1=x=>{ let m=0; for(const q of FP){ const d=x-q.dx; if(Math.abs(d)<q.r){ const v=Math.sqrt(q.r*q.r-d*d); if(v>m)m=v; } } return m; };
+  let A=0; if(ext>0){ const n=600, dx=2*ext/n; for(let i=0;i<n;i++) A+=2*w1(-ext+(i+.5)*dx)*dx; }
+  // periodic line profile over one spacing s
+  const NW=256, W=new Float32Array(NW); let Wmax=0;
+  if(ext>0){ const nI=Math.ceil(ext/s)+1;
+    for(let g=0;g<NW;g++){ const x=g/NW*s; let m=0; for(let i=-nI;i<=nI;i++){ const v=w1(x-i*s); if(v>m)m=v; } W[g]=m; if(m>Wmax)Wmax=m; } }
+  K={R,a,U,w,V,s,hmax,r,tc,vimp,mode,FP,ext,A,W,NW,Wmax,th1,th2,Ld:2*halfL,Wd:2*r};
+}
+function latticeCoverage(p,phiDeg){
+  if(K.ext<=0) return 0;
+  const s=K.s, sh=((phiDeg/360)*s)%s, J=Math.ceil(K.Wmax/p)+1, n=72; let c=0;
+  for(let iy=0;iy<n;iy++){ const y=(iy+.5)/n*p;
+    for(let ix=0;ix<n;ix++){ const x=(ix+.5)/n*s; let cov=false;
+      for(let j=-J;j<=J && !cov;j++){ const dy=Math.abs(y-j*p); if(dy>K.Wmax) continue;
+        let xx=(x-j*sh)%s; if(xx<0)xx+=s; if(dy<=K.W[Math.floor(xx/s*K.NW)%K.NW]) cov=true; }
+      if(cov)c++; } }
+  return 100*c/(n*n);
+}
+
+/* ---------- zone, lines and impacts ---------- */
+let Z; const MSmax=420;
+function build(){
+  const r=Math.max(K.r,0.01), ext=Math.max(K.ext,0.01), p=P.p, s=K.s;
+  let Ly=Math.min(Math.max(6*p,4*r),12*r); Ly=Math.max(Ly,0.2);
+  const nL=Math.floor((Ly+ext)/p)-Math.ceil(-ext/p)+2;
+  let Lx=Ly; const cap=3500;
+  if(((Lx+2*ext)/s)*nL>cap) Lx=Math.max(3*r, cap/nL*s-2*ext);
+  if(s>Lx/6) Lx=s*Math.max(3,Math.round(Lx/s)); // whole number of spacings when impacts are sparse
+  const m=ext+0.02;
+  const cell=Math.max(Lx,Ly)/MSmax, NX=Math.max(20,Math.round(Lx/cell)), NY=Math.max(20,Math.round(Ly/cell));
+  // lines for all passes
+  const lines=[];
+  for(let k=0;k<P.N;k++){
+    const half=(P.poff==="half" && k%2===1);
+    const yo=half?p/2:0, xo=half?s/2:0;
+    const j0=Math.ceil((-ext-yo)/p), j1=Math.floor((Ly+ext-yo)/p);
+    for(let j=j0;j<=j1;j++){
+      const idx=lines.length;
+      const dir=(P.path==="zigzag" && (j-j0)%2===1)?-1:1;
+      const y=yo+j*p, shift=((j*P.phi/360)*s+xo);
+      const xs=dir>0?-m:Lx+m, xe=dir>0?Lx+m:-m;
+      // impacts: mid-contact positions x = shift + i*s within [-m, Lx+m]
+      const imp=[]; const i0=Math.ceil((-m-shift)/s), i1=Math.floor((Lx+m-shift)/s);
+      if(K.mode!=="none") for(let i=i0;i<=i1;i++) imp.push(shift+i*s);
+      if(dir<0) imp.reverse();
+      lines.push({y,dir,xs,xe,imp,pass:k,idx});
+    }
+  }
+  Z={Lx,Ly,m,NX,NY,cell:Lx/NX,cellY:Ly/NY,lines};
+}
+
+/* ---------- state ---------- */
+const S={line:0,u:0,idx:0,playing:false,stopAtEnd:false,landed:[],count:0,grid:null,stamp:null,covered:0,dirty:false,frame:0};
+function resetState(){
+  S.line=0;S.u=0;S.idx=0;S.landed=[];S.count=0;S.covered=0;S.stopAtEnd=false;
+  S.grid=new Uint16Array(Z.NX*Z.NY); S.stamp=new Int32Array(Z.NX*Z.NY).fill(-1);
+}
+function rasterize(x0,y0,dir,id,grid,stamp){
+  // marks every grid point inside the union of the contact circles of one impact
+  const cx=Z.cell, cy=Z.cellY; let add=0;
+  for(const q of K.FP){
+    const xc=x0+q.dx*dir, r2=q.r*q.r;
+    const ix0=Math.max(0,Math.ceil((xc-q.r)/cx-.5)), ix1=Math.min(Z.NX-1,Math.floor((xc+q.r)/cx-.5));
+    const iy0=Math.max(0,Math.ceil((y0-q.r)/cy-.5)), iy1=Math.min(Z.NY-1,Math.floor((y0+q.r)/cy-.5));
+    for(let iy=iy0;iy<=iy1;iy++){ const dy=(iy+.5)*cy-y0, row=iy*Z.NX, lim=r2-dy*dy; if(lim<0) continue;
+      for(let ix=ix0;ix<=ix1;ix++){ const dx=(ix+.5)*cx-xc; if(dx*dx<=lim){ const g=row+ix; if(stamp[g]!==id){ stamp[g]=id; if(grid[g]===0) add++; grid[g]++; } } } }
+  }
+  return add;
+}
+function land(L,x,now){
+  const id=S.count++;
+  S.covered+=rasterize(x,L.y,L.dir,id,S.grid,S.stamp);
+  S.landed.push({x,y:L.y,dir:L.dir,line:L.idx});
+  drawDent(actx,{x,y:L.y,dir:L.dir,line:L.idx});
+  if(!reduce) S.flash={x,y:L.y,t:now};
+  S.dirty=true;
+}
+
+/* ---------- canvases ---------- */
+const tc=document.getElementById("top"), tx=tc.getContext("2d");
+const sc=document.getElementById("side"), sx=sc.getContext("2d");
+const hc=document.getElementById("heat"), hx=hc.getContext("2d");
+const acc=document.createElement("canvas"), actx=acc.getContext("2d");
+let DPR=1, TW=400, view;
+function setView(){
+  const W=tc.width, pad=0.06*W;
+  const wx=Z.Lx+2*Z.m, wy=Z.Ly+2*Math.max(K.ext,0.01)+0.04;
+  const sc_=Math.min((W-2*pad)/wx,(W-2*pad)/wy);
+  view={sc:sc_, ox:pad+((W-2*pad)-wx*sc_)/2+Z.m*sc_, oy:pad+((W-2*pad)-wy*sc_)/2+(Math.max(K.ext,0.01)+0.02)*sc_};
+}
+const X=x=>view.ox+x*view.sc, Y=y=>view.oy+y*view.sc;
+const LCOL=[[31,90,150],[46,139,87],[138,91,184],[212,98,28],[30,130,160],[180,60,90]];
+function lineRGB(i){ return LCOL[i%LCOL.length]; }
+function drawDent(ctx,d){
+  const [r,g,b]=lineRGB(d.line);
+  ctx.fillStyle=`rgba(${r},${g},${b},.30)`; ctx.beginPath();
+  for(const q of K.FP){ ctx.moveTo(X(d.x+q.dx*d.dir)+q.r*view.sc,Y(d.y)); ctx.arc(X(d.x+q.dx*d.dir),Y(d.y),q.r*view.sc,0,Math.PI*2); }
+  ctx.fill();
+  ctx.strokeStyle=`rgba(${r*.6|0},${g*.6|0},${b*.6|0},.55)`; ctx.lineWidth=Math.max(.6,DPR*.7);
+  ctx.beginPath(); ctx.arc(X(d.x),Y(d.y),K.r*view.sc,0,Math.PI*2); ctx.stroke();
+}
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  const w=Math.round(tc.getBoundingClientRect().width)||400; TW=w;
+  tc.width=tc.height=acc.width=acc.height=w*DPR;
+  const sw=Math.round(sc.getBoundingClientRect().width)||500; sc.width=sw*DPR; sc.height=Math.round(sw/2)*DPR;
+  setView(); actx.clearRect(0,0,acc.width,acc.height); for(const d of S.landed) drawDent(actx,d);
+}
+
+/* ---------- drawing: top view ---------- */
+function toolPos(){
+  const L=Z.lines[Math.min(S.line,Z.lines.length-1)]; return {L,x:L.xs+(L.xe-L.xs)*S.u,y:L.y};
+}
+function realTime(L,x){ return (x-L.xs)*L.dir/K.V; } // s since start of line
+function hAt(L,x){ // tool tip penetration at position x of line L (phase locked so impacts are at their mid positions)
+  if(!L.imp.length && K.mode==="none") return K.U*P.eta+(K.a*P.eta)*Math.sin(K.w*realTime(L,x));
+  const x0=L.imp.length?L.imp[0]:0; const t=(x-x0)*L.dir/K.V;
+  return P.eta*(K.U+K.a*Math.sin(K.w*t+Math.PI/2));
+}
+function drawTop(now){
+  const W=tc.width; tx.setTransform(1,0,0,1,0,0); tx.clearRect(0,0,W,W);
+  tx.fillStyle="#c3cad2"; tx.fillRect(0,0,W,W);
+  tx.fillStyle="#b4bcc5"; tx.fillRect(X(0),Y(0),Z.Lx*view.sc,Z.Ly*view.sc);
+  // planned path
+  tx.setLineDash([3*DPR,4*DPR]); tx.strokeStyle="rgba(23,32,42,.35)"; tx.lineWidth=DPR;
+  for(const L of Z.lines){ if(L.pass!==Z.lines[Math.min(S.line,Z.lines.length-1)].pass) continue; tx.beginPath(); tx.moveTo(X(L.xs),Y(L.y)); tx.lineTo(X(L.xe),Y(L.y)); tx.stroke(); }
+  tx.setLineDash([]);
+  tx.drawImage(acc,0,0);
+  if(document.getElementById("bare").checked && S.covered<Z.NX*Z.NY){
+    tx.globalAlpha=.65; tx.imageSmoothingEnabled=false; tx.drawImage(bareCanvas(),X(0),Y(0),Z.Lx*view.sc,Z.Ly*view.sc); tx.globalAlpha=1; }
+  tx.strokeStyle=css("--bare"); tx.lineWidth=2*DPR; tx.strokeRect(X(0),Y(0),Z.Lx*view.sc,Z.Ly*view.sc);
+  // tool
+  if(S.line<Z.lines.length){
+    const {L,x,y}=toolPos(), h=hAt(L,x);
+    tx.strokeStyle="rgba(23,32,42,.6)"; tx.lineWidth=1.2*DPR; tx.setLineDash([5*DPR,4*DPR]);
+    tx.beginPath(); tx.arc(X(x),Y(y),K.R*view.sc,0,Math.PI*2); tx.stroke(); tx.setLineDash([]);
+    if(h>0){ const hh=Math.min(h,K.R), rc=Math.sqrt(2*K.R*hh-hh*hh); tx.fillStyle="rgba(240,138,75,.85)"; tx.beginPath(); tx.arc(X(x),Y(y),Math.max(2*DPR,rc*view.sc),0,Math.PI*2); tx.fill(); }
+    tx.fillStyle="#17202a"; tx.beginPath(); tx.arc(X(x),Y(y),2.5*DPR,0,7); tx.fill();
+    // direction arrow
+    const ay=Y(y)-(K.R*view.sc+10*DPR), ax=X(x);
+    tx.strokeStyle=css("--accent"); tx.lineWidth=2.5*DPR; tx.beginPath(); tx.moveTo(ax-L.dir*16*DPR,ay); tx.lineTo(ax+L.dir*16*DPR,ay); tx.stroke();
+    tx.beginPath(); tx.moveTo(ax+L.dir*16*DPR,ay); tx.lineTo(ax+L.dir*9*DPR,ay-5*DPR); tx.lineTo(ax+L.dir*9*DPR,ay+5*DPR); tx.closePath(); tx.fillStyle=css("--accent"); tx.fill();
+  }
+  if(S.flash && now-S.flash.t<250){ const a=(now-S.flash.t)/250; tx.strokeStyle=`rgba(255,255,255,${1-a})`; tx.lineWidth=2*DPR; tx.beginPath(); tx.arc(X(S.flash.x),Y(S.flash.y),K.r*view.sc*(1+.3*a),0,7); tx.stroke(); }
+  // scale bar
+  const target=Z.Lx/4, pw=Math.pow(10,Math.floor(Math.log10(target))); let len=pw; for(const m of [1,2,5]) if(m*pw<=target) len=m*pw;
+  const bl=len*view.sc, x0=10*DPR, y0=W-12*DPR;
+  tx.fillStyle="rgba(15,20,25,.72)"; tx.fillRect(x0-5*DPR,y0-21*DPR,bl+10*DPR,28*DPR);
+  tx.fillStyle="#fff"; tx.fillRect(x0,y0,bl,3*DPR); tx.font=`500 ${11*DPR}px "IBM Plex Mono",monospace`; tx.textAlign="left";
+  tx.fillText(len>=1?nf(len,len<10&&len%1?1:0)+" mm":nf(len*1000,0)+" µm",x0,y0-6*DPR);
+}
+let bareC=null, bareDirty=true;
+function bareCanvas(){
+  if(!bareC){ bareC=document.createElement("canvas"); }
+  if(bareC.width!==Z.NX||bareC.height!==Z.NY){ bareC.width=Z.NX; bareC.height=Z.NY; bareDirty=true; }
+  if(bareDirty){ const c=bareC.getContext("2d"), img=c.createImageData(Z.NX,Z.NY), d=img.data; const col=hexRGB(css("--bare"));
+    for(let i=0;i<S.grid.length;i++) if(!S.grid[i]){ const k=i*4; d[k]=col[0]; d[k+1]=col[1]; d[k+2]=col[2]; d[k+3]=255; }
+    c.putImageData(img,0,0); bareDirty=false; }
+  return bareC;
+}
+function hexRGB(h){ h=(h||"#e5484d").replace("#",""); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+
+/* ---------- drawing: side view ---------- */
+function drawSide(){
+  const W=sc.width,H=sc.height; sx.setTransform(1,0,0,1,0,0); sx.clearRect(0,0,W,H);
+  sx.fillStyle=css("--soft"); sx.fillRect(0,0,W,H);
+  const T=1/P.f, a=K.a*P.eta*1000, U=K.U*P.eta*1000; // µm
+  const hmin=U-a, hmaxv=U+a, span=Math.max(hmaxv,0)-Math.min(hmin,0)||1;
+  const padT=26*DPR, padB=28*DPR, padL=50*DPR, padR=12*DPR;
+  const yScale=(H-padT-padB)/(span*1.15), ySurf=padT+(0-Math.min(hmin,0)+span*.075)*yScale;
+  const yOf=h=>ySurf+h*yScale;
+  // material
+  sx.fillStyle="#9aa6b3"; sx.fillRect(padL,ySurf,W-padL-padR,H-padB-ySurf);
+  sx.strokeStyle="#5d6b7a"; sx.lineWidth=1.5*DPR; sx.beginPath(); sx.moveTo(padL,ySurf); sx.lineTo(W-padR,ySurf); sx.stroke();
+  // time window: 3.5 periods ending at current time
+  let L=null, xNow=0;
+  if(Z.lines.length){ const tp=toolPos(); L=tp.L; xNow=tp.x; }
+  const tNow= L? (xNow-(L.imp.length?L.imp[0]:L.xs))*L.dir/K.V : 0;
+  const t0=tNow-3*T, t1=tNow+0.5*T, xOf=t=>padL+(t-t0)/(t1-t0)*(W-padL-padR);
+  const h=t=>U+a*Math.sin(2*Math.PI*P.f*t+Math.PI/2);
+  // contact fill
+  sx.fillStyle="rgba(212,98,28,.55)"; sx.beginPath(); let open=false;
+  const NSm=500;
+  for(let i=0;i<=NSm;i++){ const t=t0+(t1-t0)*i/NSm, v=h(t);
+    if(v>0){ if(!open){ sx.moveTo(xOf(t),ySurf); open=true; } sx.lineTo(xOf(t),yOf(v)); }
+    else if(open){ sx.lineTo(xOf(t),ySurf); sx.closePath(); open=false; } }
+  if(open){ sx.lineTo(xOf(t1),ySurf); sx.closePath(); } sx.fill();
+  // curve
+  sx.strokeStyle=css("--theory"); sx.lineWidth=2.2*DPR; sx.beginPath();
+  for(let i=0;i<=NSm;i++){ const t=t0+(t1-t0)*i/NSm; const X_=xOf(t), Y_=yOf(h(t)); i?sx.lineTo(X_,Y_):sx.moveTo(X_,Y_); } sx.stroke();
+  // now marker
+  sx.strokeStyle=css("--ink"); sx.lineWidth=1*DPR; sx.setLineDash([4*DPR,3*DPR]); sx.beginPath(); sx.moveTo(xOf(tNow),padT-8*DPR); sx.lineTo(xOf(tNow),H-padB); sx.stroke(); sx.setLineDash([]);
+  sx.fillStyle=css("--ink"); sx.beginPath(); sx.arc(xOf(tNow),yOf(h(tNow)),4*DPR,0,7); sx.fill();
+  // axes labels
+  sx.fillStyle=css("--muted"); sx.font=`500 ${10.5*DPR}px "IBM Plex Mono",monospace`; sx.textAlign="right";
+  const ticks=[Math.min(hmin,0),0,Math.max(hmaxv,0)]; if(Math.abs(U)>2) ticks.push(U);
+  for(const v of ticks){ sx.fillText(nf(v,0)+" µm",padL-5*DPR,yOf(v)+4*DPR); sx.strokeStyle="rgba(120,130,140,.35)"; sx.beginPath(); sx.moveTo(padL,yOf(v)); sx.lineTo(W-padR,yOf(v)); sx.stroke(); }
+  sx.textAlign="left"; sx.fillStyle=css("--ink");
+  sx.fillText("air (tool above surface)",padL+6*DPR,padT-8*DPR);
+  sx.fillStyle="#2b3642"; sx.fillText("material  ↓ h > 0 = penetration",padL+6*DPR,H-padB-6*DPR);
+  sx.fillStyle=css("--muted"); sx.textAlign="center";
+  sx.fillText("time — window of 3.5 periods (T = "+nf(1000/P.f,P.f>100?2:1)+" ms)",(padL+W-padR)/2,H-8*DPR);
+}
+
+/* ---------- map and histogram ---------- */
+const HST=[[234,242,248],[150,196,228],[58,130,192],[24,72,140],[10,28,70]];
+let TOP=10, PAL=[];
+function buildPal(){
+  const lam=K.A/(K.s*P.p)*P.N; TOP=Math.max(6,Math.min(40,Math.ceil(lam*1.5+4)));
+  PAL=[hexRGB(css("--bare"))];
+  for(let k=1;k<=TOP;k++){ const t=Math.sqrt((k-1)/Math.max(1,TOP-1))*(HST.length-1), a=Math.min(HST.length-2,Math.floor(t)), f=t-a;
+    PAL.push(HST[a].map((c,j)=>Math.round(c+(HST[a+1][j]-c)*f))); }
+  const el=document.getElementById("scale"); el.innerHTML="Hits per point:";
+  const stepL=TOP>20?2:1;
+  for(let k=0;k<=TOP;k++){ const sp=document.createElement("span"); sp.className="c"; sp.innerHTML=`<i style="background:rgb(${PAL[k].join(",")})"></i>${(k%stepL===0||k===TOP)?(k===TOP?"≥"+k:k):"&nbsp;"}`; el.appendChild(sp); }
+}
+function gstats(g){ let sum=0,sq=0,mx=0,mn=1e9; const c=[0,0,0,0];
+  for(let i=0;i<g.length;i++){ const v=g[i]; sum+=v; sq+=v*v; if(v>mx)mx=v; if(v<mn)mn=v; c[v>3?3:v]++; }
+  const n=g.length, m=sum/n; return {m,sd:Math.sqrt(Math.max(0,sq/n-m*m)),mx,mn,c:c.map(x=>100*x/n)}; }
+function fillCmp(pre,st){ document.getElementById(pre+"_cov").textContent=nf(100-st.c[0],1)+" %";
+  for(let k=0;k<4;k++) document.getElementById(pre+"_c"+k).textContent=nf(st.c[k],1)+" %";
+  document.getElementById(pre+"_mean").textContent=nf(st.m,2); document.getElementById(pre+"_sd").textContent=nf(st.sd,2);
+  document.getElementById(pre+"_mm").textContent=st.mn+" / "+st.mx; }
+/* random process with the same mean: same footprint, same impact density, uniform random positions */
+const rc=document.getElementById("rheat"), rx=rc.getContext("2d"); let RG=null;
+function poissonDraw(mu){ if(mu<30){ const L=Math.exp(-mu); let k=0,p=1; do{k++;p*=Math.random();}while(p>L); return k-1; }
+  let u=0; while(u===0)u=Math.random(); return Math.max(0,Math.round(mu+Math.sqrt(mu)*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random()))); }
+function randomMap(){
+  RG=new Uint16Array(Z.NX*Z.NY); const st=new Int32Array(Z.NX*Z.NY).fill(-1);
+  if(K.mode!=="none"){
+    const e=K.ext, wx=Z.Lx+2*e, wy=Z.Ly+2*e, dens=P.N/(K.s*P.p), N=poissonDraw(dens*wx*wy);
+    for(let i=0;i<N;i++) rasterize(-e+Math.random()*wx,-e+Math.random()*wy,Math.random()<.5?1:-1,i,RG,st);
+  }
+  rc.width=Z.NX; rc.height=Z.NY; rc.style.aspectRatio=Z.NX+"/"+Z.NY;
+  const img=rx.createImageData(Z.NX,Z.NY), d=img.data;
+  for(let i=0;i<RG.length;i++){ const c=PAL[Math.min(RG[i],TOP)], k=i*4; d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; }
+  rx.putImageData(img,0,0); fillCmp("r",gstats(RG));
+}
+function drawHeat(){
+  hc.width=Z.NX; hc.height=Z.NY; hc.style.aspectRatio=Z.NX+"/"+Z.NY;
+  const img=hx.createImageData(Z.NX,Z.NY), d=img.data, hist=new Float64Array(TOP+1); let sum=0,mx=0,mn=1e9;
+  for(let i=0;i<S.grid.length;i++){ const v=S.grid[i], c=PAL[Math.min(v,TOP)], k=i*4; d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; hist[Math.min(v,TOP)]++; sum+=v; if(v>mx)mx=v; if(v<mn)mn=v; }
+  hx.putImageData(img,0,0);
+  const n=S.grid.length; for(let k=0;k<=TOP;k++) hist[k]/=n;
+  drawHist(hist,sum/n);
+  document.getElementById("hMean").textContent=nf(sum/n,2);
+  document.getElementById("hMM").textContent=mn+" / "+mx;
+  document.getElementById("hZero").textContent=nf(100*hist[0],1)+" %";
+  let c=[0,0,0,0]; for(let i=0;i<S.grid.length;i++){ const v=S.grid[i]; c[v>3?3:v]++; }
+  const cols=[PAL[0],[156,196,228],[58,130,192],[16,45,100]];
+  for(let k=0;k<4;k++){ const sh=100*c[k]/n;
+    document.getElementById("lc"+k).textContent=nf(sh,1)+" %";
+    const b=document.getElementById("sb"+k); b.style.width=sh+"%"; b.style.background="rgb("+cols[k].join(",")+")";
+    document.getElementById("sw"+k).style.background="rgb("+cols[k].join(",")+")"; }
+  fillCmp("d",gstats(S.grid));
+}
+const SVGNS="http://www.w3.org/2000/svg";
+function el(n,a,p){ const e=document.createElementNS(SVGNS,n); for(const k in a) e.setAttribute(k,a[k]); p.appendChild(e); return e; }
+function lgf(n){ let s=0; for(let i=2;i<=n;i++) s+=Math.log(i); return s; }
+function drawHist(h,mean){
+  const svg=document.getElementById("hist"); svg.innerHTML="";
+  const L=46,R=12,T=14,B=40,W=560,H=300, nb=TOP+1, bw=(W-L-R)/nb;
+  const pois=[]; let acc=0; for(let k=0;k<TOP;k++){ const p=mean>0?Math.exp(-mean+k*Math.log(mean)-lgf(k)):(k===0?1:0); pois.push(p); acc+=p; } pois.push(Math.max(0,1-acc));
+  const ymax=Math.max(.05,Math.min(1,Math.ceil(Math.max(...h,...pois)*10+.5)/10)), y=v=>T+(H-T-B)*(1-v/ymax);
+  for(let i=0;i<=5;i++){ const v=ymax*i/5; el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:css("--line")},svg); el("text",{x:L-6,y:y(v)+4,"text-anchor":"end"},svg).textContent=nf(100*v,0)+" %"; }
+  for(let k=0;k<nb;k++){ const x0=L+k*bw;
+    el("rect",{x:x0+bw*.12,y:y(h[k]),width:bw*.76,height:Math.max(0,y(0)-y(h[k])),fill:k===0?css("--bare"):css("--accent"),rx:2},svg);
+    if(nb<=21||k%2===0||k===TOP) el("text",{x:x0+bw/2,y:H-B+16,"text-anchor":"middle"},svg).textContent=k===TOP?"≥"+k:k; }
+  let d=""; pois.forEach((p,k)=>{ d+=(k?"L":"M")+(L+k*bw+bw/2).toFixed(1)+","+y(p).toFixed(1); });
+  el("path",{d,fill:"none",stroke:css("--random"),"stroke-width":1.5,"stroke-dasharray":"4 3"},svg);
+  pois.forEach((p,k)=>el("circle",{cx:L+k*bw+bw/2,cy:y(p),r:3,fill:css("--random")},svg));
+  el("text",{x:(L+W-R)/2,y:H-6,"text-anchor":"middle"},svg).textContent="k = number of hits received by a point";
+}
+
+/* ---------- coverage vs step-over chart ---------- */
+let pCurve=[];
+function computeCurve(){
+  const pmax=Math.max(P.p*1.6, 2.6*Math.max(K.Wmax,0.01)), n=60; pCurve=[];
+  for(let i=1;i<=n;i++){ const p=pmax*i/n; pCurve.push([p,latticeCoverage(p,P.phi),100*(1-Math.exp(-K.A/(K.s*p)))]); }
+  return pmax;
+}
+function drawPChart(pmax){
+  const svg=document.getElementById("pchart"); svg.innerHTML="";
+  const L=46,R=14,T=12,B=36,W=560,H=280, x=v=>L+(W-L-R)*v/pmax, y=v=>T+(H-T-B)*(1-v/100);
+  for(let v=0;v<=100;v+=20){ el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:css("--line")},svg); el("text",{x:L-6,y:y(v)+4,"text-anchor":"end"},svg).textContent=v+" %"; }
+  const st=niceStep(pmax/6); for(let v=0;v<=pmax+1e-9;v+=st) el("text",{x:x(v),y:H-B+16,"text-anchor":"middle"},svg).textContent=nf(v,st<0.1?2:st<1?1:0);
+  el("text",{x:(L+W-R)/2,y:H-4,"text-anchor":"middle"},svg).textContent="step-over p (mm)";
+  const path=(col,idx,dash)=>{ let d=""; pCurve.forEach((q,i)=>{ d+=(i?"L":"M")+x(q[0]).toFixed(1)+","+y(q[idx]).toFixed(1); }); el("path",{d,fill:"none",stroke:col,"stroke-width":2.2,"stroke-dasharray":dash||""},svg); };
+  path(css("--random"),2,"5 4"); path(css("--theory"),1);
+  if(K.r>0){ const pg=2*Math.sqrt(Math.max(0,K.r*K.r-(K.s/2)*(K.s/2))); if(pg<pmax){ el("line",{x1:x(pg),x2:x(pg),y1:y(0),y2:y(100),stroke:css("--muted"),"stroke-dasharray":"2 4"},svg); const nearR=x(pg)>W-R-170; el("text",{x:x(pg)+(nearR?-4:4),y:y(6),"text-anchor":nearR?"end":"start"},svg).textContent="gap-free limit (aligned)"; } }
+  const cv=latticeCoverage(P.p,P.phi);
+  el("circle",{cx:x(P.p),cy:y(cv),r:5.5,fill:css("--accent"),stroke:css("--surface"),"stroke-width":2},svg);
+  document.getElementById("rCovTh").textContent=nf(cv,1)+" %";
+}
+function niceStep(v){ const p=Math.pow(10,Math.floor(Math.log10(v))); for(const m of [1,2,5,10]) if(m*p>=v) return m*p; return 10*p; }
+
+/* ---------- texts ---------- */
+function fmtLen(mm){ return mm>=1?nf(mm,2)+" mm":nf(mm*1000,mm*1000<10?1:0)+" µm"; }
+function fillKin(){
+  document.getElementById("kS").textContent=fmtLen(K.s);
+  document.getElementById("kH").textContent=nf(K.hmax*1000,1)+" µm";
+  document.getElementById("kR").textContent=K.r>0?fmtLen(K.r):"no contact";
+  document.getElementById("kTc").textContent=K.mode==="none"?"0":K.mode==="cont"?"continuous":nf(K.tc*1000,2)+" ms ("+nf(100*K.tc*P.f,0)+" %)";
+  document.getElementById("kVi").textContent=K.mode==="impact"?nf(K.vimp,1)+" mm/s":"–";
+  const vr=Math.hypot(K.vimp,K.V), ang=Math.atan2(K.V,K.vimp)*180/Math.PI;
+  document.getElementById("kVt").textContent=nf(K.V,1)+" mm/s";
+  document.getElementById("kVr").textContent=K.mode==="impact"?nf(vr,1)+" mm/s":"–";
+  document.getElementById("kAng").textContent=K.mode==="impact"?nf(ang,1)+"° ("+nf(90-ang,1)+"° to the surface)":"–";
+  document.getElementById("c8").textContent=K.mode==="impact"?nf(vr,1)+" mm/s at "+nf(ang,1)+"°":"–";
+  document.getElementById("kSm").textContent=K.mode==="impact"?fmtLen(K.V*K.tc):"–";
+  const AR=K.Wd>0?K.Ld/K.Wd:0;
+  document.getElementById("kL").textContent=K.mode==="impact"?fmtLen(K.Ld):K.mode==="cont"?"continuous":"–";
+  document.getElementById("kW").textContent=K.Wd>0?fmtLen(K.Wd):"–";
+  document.getElementById("kAR").textContent=K.mode==="impact"?nf(AR,2)+(AR<1.05?" (round)":AR<1.2?" (slightly oval)":" (elongated)"):K.mode==="cont"?"groove":"–";
+  document.getElementById("kA").textContent=nf(K.A,K.A<0.01?5:3)+" mm²";
+  const lam=K.A/(K.s*P.p); document.getElementById("kN").textContent=nf(lam,2);
+  const w=document.getElementById("kWarn");
+  w.textContent= K.mode==="none" ? "The tool never reaches the surface: increase U_off or a (h_max = U_off + a must be positive)."
+    : K.mode==="cont" ? "U_off ≥ a: the tool stays in contact all the time (continuous groove, no separate impacts)."
+    : (K.hmax>K.R ? "Penetration larger than the tool radius: the dent radius is capped at R."
+    : (K.Wd>0 && K.Ld/K.Wd>1.2 ? "Elongated dents (L/W = "+nf(K.Ld/K.Wd,2)+"): the tool travels "+fmtLen(K.V*K.tc)+" during each contact. Real dents will also show ploughing and a front lip; reduce V_feed or U_off, or raise f, for round dents." : ""));
+  document.getElementById("c1").textContent=fmtLen(K.s);
+  document.getElementById("c2").textContent=K.r>0?"r = "+fmtLen(K.r):"–";
+  document.getElementById("c7").textContent=K.mode==="impact"?"L/W = "+nf(K.Ld/K.Wd,2):"–";
+  document.getElementById("c3").textContent=nf(K.A,K.A<0.01?5:3)+" mm²";
+  document.getElementById("c4").textContent="λ = "+nf(lam,2);
+  const pg=K.r>0?2*Math.sqrt(Math.max(0,K.r*K.r-(K.s/2)**2)):0;
+  document.getElementById("c5").textContent=K.r>0?"p ≤ "+fmtLen(pg):"–";
+  const rate=K.V*P.p; document.getElementById("c6").textContent=nf(rate,1)+" mm²/s · "+(100/rate>=60?nf(100/rate/60,1)+" min":nf(100/rate,1)+" s")+"/cm²";
+}
+let lastPhase="";
+function updatePhase(){
+  let h;
+  const nL=Z.lines.length, perPass=nL/P.N;
+  if(K.mode==="none") h="The tool never touches the surface with these settings.";
+  else if(S.line>=nL) h=`Done: <b>${nf(100*S.covered/S.grid.length,1)} %</b> of the measured zone covered after ${P.N} pass${P.N>1?"es":""} (${S.count} impacts).`;
+  else if(!S.playing && S.line===0 && S.u===0) h="Press <b>Play</b>: the tool travels along the lines while the actuator hammers the surface at f. Dents appear every s = V/f.";
+  else { const L=Z.lines[S.line]; h=`Pass ${L.pass+1}, line ${(S.line%perPass)+1} of ${perPass}: moving ${L.dir>0?"→":"←"} at ${nf(P.V,0)} mm/min, one impact every ${fmtLen(K.s)}.`; }
+  if(h!==lastPhase){ document.getElementById("phase").innerHTML=h; lastPhase=h; }
+  document.getElementById("rLines").textContent=Math.min(S.line,nL)+" / "+nL;
+  document.getElementById("rImp").textContent=S.count;
+  document.getElementById("rCov").textContent=nf(100*S.covered/S.grid.length,1)+" %";
+}
+
+/* ---------- loop ---------- */
+function finishLine(now){
+  const L=Z.lines[S.line]; while(S.idx<L.imp.length) land(L,L.imp[S.idx++],now);
+  S.line++; S.u=0; S.idx=0;
+  if(S.line>=Z.lines.length){ S.playing=false; setPlay(); }
+  else if(S.stopAtEnd){ S.playing=false; S.stopAtEnd=false; setPlay(); }
+}
+let last=performance.now();
+function tick(now){
+  const dt=Math.min(.05,(now-last)/1000); last=now;
+  if(S.playing && S.line<Z.lines.length){
+    const L=Z.lines[S.line], len=Math.abs(L.xe-L.xs), mult=+document.getElementById("speed").value;
+    const tLine=Math.max(1.2,Math.min(6,L.imp.length*0.09))/mult;
+    S.u+=dt/tLine;
+    if(S.u>=1) finishLine(now);
+    else { const x=L.xs+(L.xe-L.xs)*S.u; while(S.idx<L.imp.length && (L.imp[S.idx]-x)*L.dir<=0) land(L,L.imp[S.idx++],now); }
+  }
+  if(S.dirty && (++S.frame%4===0)){ drawHeat(); bareDirty=true; S.dirty=false; }
+  drawTop(now); drawSide(); updatePhase();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- controls ---------- */
+const playBtn=document.getElementById("play");
+function setPlay(){ playBtn.textContent=S.playing?"❚❚ Pause":(S.line>=Z.lines.length?"↻ Replay":"▶ Play"); }
+function restart(keep){
+  derive(); build(); resetState(); resize(); buildPal(); drawHeat(); randomMap(); bareDirty=true;
+  fillKin(); drawPChart(computeCurve()); lastPhase="";
+  S.playing=!!keep; setPlay();
+}
+playBtn.onclick=()=>{ flush(); if(S.line>=Z.lines.length) restart(false); S.playing=!S.playing; S.stopAtEnd=false; setPlay(); };
+document.getElementById("step").onclick=()=>{ flush(); if(S.line>=Z.lines.length) restart(false); S.playing=true; S.stopAtEnd=true; setPlay(); };
+document.getElementById("all").onclick=()=>{ flush(); const now=performance.now(); if(S.line>=Z.lines.length) restart(false); S.stopAtEnd=false; while(S.line<Z.lines.length) finishLine(now); S.playing=false; setPlay(); drawHeat(); bareDirty=true; };
+document.getElementById("reset").onclick=()=>restart(S.playing);
+document.getElementById("bare").onchange=()=>{ bareDirty=true; };
+document.getElementById("defaults").onclick=()=>{ Object.assign(P,DEF); for(const s of SPEC) sync(s); restart(false); };
+hc.addEventListener("mousemove",e=>{ const b=hc.getBoundingClientRect(); const ix=Math.floor((e.clientX-b.left)/b.width*Z.NX), iy=Math.floor((e.clientY-b.top)/b.height*Z.NY);
+  if(ix<0||iy<0||ix>=Z.NX||iy>=Z.NY) return; const v=S.grid[iy*Z.NX+ix];
+  document.getElementById("hover").textContent=`Point (${nf((ix+.5)*Z.cell,3)} mm, ${nf((iy+.5)*Z.cellY,3)} mm): hit ${v} time${v===1?"":"s"}`+(v===0?" (never hit)":""); });
+document.getElementById("redraw").onclick=()=>randomMap();
+rc.addEventListener("mousemove",e=>{ if(!RG) return; const b=rc.getBoundingClientRect(); const ix=Math.floor((e.clientX-b.left)/b.width*Z.NX), iy=Math.floor((e.clientY-b.top)/b.height*Z.NY);
+  if(ix<0||iy<0||ix>=Z.NX||iy>=Z.NY) return; const v=RG[iy*Z.NX+ix];
+  document.getElementById("rhover").textContent=`Point (${nf((ix+.5)*Z.cell,3)} mm, ${nf((iy+.5)*Z.cellY,3)} mm): hit ${v} time${v===1?"":"s"}`+(v===0?" (never hit)":""); });
+hc.addEventListener("mouseleave",()=>{ document.getElementById("hover").textContent="Hover over the map to read the number of impacts at a point."; });
+
+/* ---------- parameter inputs (slider + number) ---------- */
+const box=document.getElementById("params"); let rT;
+function sync(s){ if(s.sel){ document.getElementById("in-"+s.k).value=P[s.k]; return; }
+  document.getElementById("rg-"+s.k).value=P[s.k]; document.getElementById("in-"+s.k).value=P[s.k]; }
+let pending=false;
+function changed(){ clearTimeout(rT); pending=true; rT=setTimeout(()=>{ pending=false; restart(S.playing); },120); }
+function flush(){ if(pending){ clearTimeout(rT); pending=false; restart(false); } }
+for(const s of SPEC){
+  const d=document.createElement("div"); d.className="param";
+  if(s.sel){
+    d.innerHTML=`<label class="row" for="in-${s.k}"><span>${s.lab}</span></label><select id="in-${s.k}">${s.sel.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("")}</select>`;
+    box.appendChild(d); const el_=d.querySelector("select"); el_.value=P[s.k]; el_.addEventListener("change",()=>{ P[s.k]=el_.value; changed(); });
+  } else {
+    d.innerHTML=`<div class="row"><label for="in-${s.k}">${s.lab}</label><span class="in"><input type="number" id="in-${s.k}" min="${s.min}" max="${s.max}" step="${s.step}"><span class="u">${s.u}</span></span></div><input type="range" id="rg-${s.k}" min="${s.min}" max="${s.max}" step="${s.step}" aria-label="${s.lab}">`;
+    box.appendChild(d);
+    const num=d.querySelector('input[type=number]'), rg=d.querySelector('input[type=range]');
+    num.value=P[s.k]; rg.value=P[s.k];
+    rg.addEventListener("input",()=>{ P[s.k]=+rg.value; num.value=rg.value; changed(); });
+    num.addEventListener("change",()=>{ let v=+num.value; if(!isFinite(v)) v=P[s.k]; v=Math.max(s.min,Math.min(s.max,v)); P[s.k]=v; num.value=v; rg.value=v; changed(); });
+  }
+}
+let rz; window.addEventListener("resize",()=>{ clearTimeout(rz); rz=setTimeout(resize,120); });
+
+restart(!reduce);
+requestAnimationFrame(t=>{ last=t; tick(t); });
+})();
+</script>
+</body>
+</html>
