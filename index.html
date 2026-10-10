@@ -79,6 +79,12 @@ svg.chart text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
 .stack i{display:block;height:100%;transition:width .2s}
 .cov4{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
 .cov4 .read .k{display:flex;align-items:center;gap:6px}
+#depth{aspect-ratio:1/1;image-rendering:pixelated;cursor:crosshair}
+.dscale{display:flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.dlegend{display:flex;flex-direction:column;gap:3px}
+.dlegend .ramp{height:14px;border-radius:3px;border:1px solid var(--line)}
+.dticks{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.dscale .sep{flex:1}
 #rheat{aspect-ratio:1/1;image-rendering:pixelated;cursor:crosshair}
 table.cmp{width:100%;border-collapse:collapse;font-size:14px}
 table.cmp th,table.cmp td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
@@ -195,6 +201,36 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 </div>
 
 <div class="grid">
+  <section class="panel" aria-label="Depth map">
+    <h2>Map: final dent depth (deepest trace kept)</h2>
+    <canvas id="depth" aria-label="Map of the deepest penetration reached at each point"></canvas>
+    <div class="dlegend">
+      <div class="ramp" id="dramp"></div>
+      <div class="dticks" id="dticks"></div>
+      <div class="dscale"><span>Depth (µm)</span><span class="sep"></span><span class="sw" style="background:rgb(225,229,234);border:1px solid var(--line)"></span><span>untreated (0 µm)</span><span id="dmaxl" hidden></span></div>
+    </div>
+    <div id="dhover">Hover over the map to read the depth at a point. Click on the map to move both profile lines to that point.</div>
+    <div class="param"><div class="row"><label for="pfx">Vertical line (profile across the feed) at x</label><output id="pfxo">–</output></div><input type="range" id="pfx" min="0" max="1" step="1" value="0"></div>
+    <div class="param"><div class="row"><label for="pfy">Horizontal line (profile along the feed) at y</label><output id="pfyo">–</output></div><input type="range" id="pfy" min="0" max="1" step="1" value="0"></div>
+    <div><button id="pfline">Snap horizontal line to nearest tool path</button></div>
+  </section>
+  <section class="panel" aria-label="Depth profiles">
+    <h2>Depth profiles and surface waviness</h2>
+    <svg class="chart" id="profY" viewBox="0 0 560 200" role="img" aria-label="Depth profile across the feed direction"></svg>
+    <svg class="chart" id="profX" viewBox="0 0 560 200" role="img" aria-label="Depth profile along the feed direction"></svg>
+    <div class="reads">
+      <div class="read hl"><div class="k">Max depth (measured zone)</div><div class="v" id="dMax">–</div></div>
+      <div class="read"><div class="k">Mean depth (whole zone)</div><div class="v" id="dMean">–</div></div>
+      <div class="read"><div class="k">Shallowest point</div><div class="v" id="dMin">–</div></div>
+      <div class="read"><div class="k">Peak-to-valley of the treated surface</div><div class="v" id="dPV">–</div></div>
+      <div class="read th"><div class="k">Ridge between lines (theory)</div><div class="v" id="dRy">–</div></div>
+      <div class="read th"><div class="k">Scallop between impacts (theory)</div><div class="v" id="dRx">–</div></div>
+    </div>
+    <p class="note">Each point keeps the deepest trace of the sphere over all impacts: depth = max over impacts of [h − (R − √(R² − d²))], d = distance to the tool axis. Theoretical ridge height between neighbouring traces at spacing e: R − √(R² − (e/2)²), with e = p across the feed and e = s along it (tool travel during contact neglected). Kinematic model: no elastic recovery or pile-up.</p>
+  </section>
+</div>
+
+<div class="grid">
   <section class="panel" aria-label="Random process map">
     <h2>Map: random process with the same mean</h2>
     <canvas id="rheat" aria-label="Map of hits per point for random impacts with the same mean"></canvas>
@@ -258,14 +294,14 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 (function(){
 "use strict";
 /* ---------- parameters ---------- */
-const DEF={Dt:3, f:100, a:80, U:20, eta:1, V:1000, p:0.8, phi:0, path:"zigzag", N:1, poff:"none"};
+const DEF={Dt:3, f:100, a:40, U:20, eta:1, V:16.7, p:0.8, phi:0, path:"zigzag", N:1, poff:"none"};
 const SPEC=[
  {k:"Dt",  lab:"Tool diameter D", u:"mm",    min:0.5, max:20,   step:0.1, d:1},
  {k:"f",   lab:"Impact frequency f", u:"Hz", min:1,   max:500,  step:1,   d:0},
  {k:"a",   lab:"Amplitude a", u:"µm",        min:1,   max:300,  step:1,   d:0},
  {k:"U",   lab:"Offset of median line U_off", u:"µm", min:-300, max:300, step:1, d:0},
  {k:"eta", lab:"Penetration efficiency η", u:"–", min:0.05, max:1, step:0.01, d:2},
- {k:"V",   lab:"Feed velocity V_feed", u:"mm/min", min:50, max:20000, step:10, d:0},
+ {k:"V",   lab:"Feed velocity V_feed", u:"mm/s", min:0.5, max:200, step:0.1, d:1},
  {k:"p",   lab:"Step-over between lines p", u:"mm", min:0.02, max:5, step:0.01, d:2},
  {k:"phi", lab:"Phase shift between lines", u:"°", min:0, max:360, step:5, d:0},
  {k:"N",   lab:"Number of passes", u:"–", min:1, max:10, step:1, d:0},
@@ -280,7 +316,7 @@ const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim
 /* ---------- kinematics and footprint ---------- */
 let K; // derived quantities (mm, s)
 function derive(){
-  const R=P.Dt/2, a=P.a/1000, U=P.U/1000, w=2*Math.PI*P.f, V=P.V/60, s=V/P.f;
+  const R=P.Dt/2, a=P.a/1000, U=P.U/1000, w=2*Math.PI*P.f, V=P.V, s=V/P.f; // V in mm/s
   const hmax=P.eta*(U+a);
   let th1, th2, mode;
   if(U+a<=0){ mode="none"; th1=th2=Math.PI/2; }
@@ -290,12 +326,12 @@ function derive(){
   const vimp= mode==="impact" ? a*w*Math.cos(th1) : 0;  // mm/s at first contact
   const hh=Math.min(hmax,R); const r=hmax>0?Math.sqrt(Math.max(0,2*R*hh-hh*hh)):0;
   // footprint samples: offset along the line (relative to mid-contact) and contact radius
-  const NS= mode==="cont"?24:14, FP=[];
+  const NS=Math.min(800,Math.max(mode==="cont"?24:14,Math.ceil(V*tc/(0.2*Math.max(r,1e-3))))), FP=[]; // enough samples to keep the trace continuous at high feed
   if(mode!=="none") for(let k=0;k<NS;k++){
     const th=th1+(th2-th1)*(k+0.5)/NS, h=Math.min(R,P.eta*(U+a*Math.sin(th)));
-    if(h>0) FP.push({dx:(th-Math.PI/2)/w*V, r:Math.sqrt(2*R*h-h*h)});
+    if(h>0) FP.push({dx:(th-Math.PI/2)/w*V, r:Math.sqrt(2*R*h-h*h), h});
   }
-  if(mode!=="none") FP.push({dx:0,r:r});
+  if(mode!=="none") FP.push({dx:0,r:r,h:hh});
   let ext=0; for(const q of FP) ext=Math.max(ext,Math.abs(q.dx)+q.r);
   let halfL=0; if(mode!=="none") for(let k=0;k<=3000;k++){ const th=th1+(th2-th1)*k/3000, h=Math.min(R,P.eta*(U+a*Math.sin(th))); if(h>0){ const v=Math.abs((th-Math.PI/2)/w*V)+Math.sqrt(2*R*h-h*h); if(v>halfL) halfL=v; } }
   if(mode==="cont") halfL=Infinity;
@@ -323,11 +359,15 @@ function latticeCoverage(p,phiDeg){
 let Z; const MSmax=420;
 function build(){
   const r=Math.max(K.r,0.01), ext=Math.max(K.ext,0.01), p=P.p, s=K.s;
+  // r = half-width of a footprint across the feed; ext = half-length along the feed (includes tool travel during contact)
   let Ly=Math.min(Math.max(6*p,4*r),12*r); Ly=Math.max(Ly,0.2);
-  const nL=Math.floor((Ly+ext)/p)-Math.ceil(-ext/p)+2;
+  let nL=Math.floor((Ly+r)/p)-Math.ceil(-r/p)+2;
   let Lx=Ly; const cap=3500;
   if(((Lx+2*ext)/s)*nL>cap) Lx=Math.max(3*r, cap/nL*s-2*ext);
-  if(s>Lx/6) Lx=s*Math.max(3,Math.round(Lx/s)); // whole number of spacings when impacts are sparse
+  if(s>Lx/6){ // sparse impacts (high feed): measure over a whole number of spacings, keep the zone aspect ratio <= 3
+    Lx=s*Math.max(1,Math.round(Lx/s));
+    if(Lx>3*Ly) Ly=Math.min(Lx/3,300*p);
+  }
   const m=ext+0.02;
   const cell=Math.max(Lx,Ly)/MSmax, NX=Math.max(20,Math.round(Lx/cell)), NY=Math.max(20,Math.round(Ly/cell));
   // lines for all passes
@@ -335,7 +375,7 @@ function build(){
   for(let k=0;k<P.N;k++){
     const half=(P.poff==="half" && k%2===1);
     const yo=half?p/2:0, xo=half?s/2:0;
-    const j0=Math.ceil((-ext-yo)/p), j1=Math.floor((Ly+ext-yo)/p);
+    const j0=Math.ceil((-r-yo)/p), j1=Math.floor((Ly+r-yo)/p);
     for(let j=j0;j<=j1;j++){
       const idx=lines.length;
       const dir=(P.path==="zigzag" && (j-j0)%2===1)?-1:1;
@@ -355,23 +395,25 @@ function build(){
 const S={line:0,u:0,idx:0,playing:false,stopAtEnd:false,landed:[],count:0,grid:null,stamp:null,covered:0,dirty:false,frame:0};
 function resetState(){
   S.line=0;S.u=0;S.idx=0;S.landed=[];S.count=0;S.covered=0;S.stopAtEnd=false;
-  S.grid=new Uint16Array(Z.NX*Z.NY); S.stamp=new Int32Array(Z.NX*Z.NY).fill(-1);
+  S.grid=new Uint16Array(Z.NX*Z.NY); S.stamp=new Int32Array(Z.NX*Z.NY).fill(-1); S.depth=new Float32Array(Z.NX*Z.NY);
 }
-function rasterize(x0,y0,dir,id,grid,stamp){
-  // marks every grid point inside the union of the contact circles of one impact
-  const cx=Z.cell, cy=Z.cellY; let add=0;
+function rasterize(x0,y0,dir,id,grid,stamp,depth){
+  // marks every grid point inside the union of the contact circles of one impact;
+  // if depth is given, keeps the deepest trace of the sphere: z = h - (R - sqrt(R^2 - d^2))
+  const cx=Z.cell, cy=Z.cellY, R=K.R, R2=R*R; let add=0;
   for(const q of K.FP){
     const xc=x0+q.dx*dir, r2=q.r*q.r;
     const ix0=Math.max(0,Math.ceil((xc-q.r)/cx-.5)), ix1=Math.min(Z.NX-1,Math.floor((xc+q.r)/cx-.5));
     const iy0=Math.max(0,Math.ceil((y0-q.r)/cy-.5)), iy1=Math.min(Z.NY-1,Math.floor((y0+q.r)/cy-.5));
     for(let iy=iy0;iy<=iy1;iy++){ const dy=(iy+.5)*cy-y0, row=iy*Z.NX, lim=r2-dy*dy; if(lim<0) continue;
-      for(let ix=ix0;ix<=ix1;ix++){ const dx=(ix+.5)*cx-xc; if(dx*dx<=lim){ const g=row+ix; if(stamp[g]!==id){ stamp[g]=id; if(grid[g]===0) add++; grid[g]++; } } } }
+      for(let ix=ix0;ix<=ix1;ix++){ const dx=(ix+.5)*cx-xc; if(dx*dx<=lim){ const g=row+ix; if(stamp[g]!==id){ stamp[g]=id; if(grid[g]===0) add++; grid[g]++; }
+        if(depth){ const z=q.h-(R-Math.sqrt(R2-dx*dx-dy*dy)); if(z>depth[g]) depth[g]=z; } } } }
   }
   return add;
 }
 function land(L,x,now){
   const id=S.count++;
-  S.covered+=rasterize(x,L.y,L.dir,id,S.grid,S.stamp);
+  S.covered+=rasterize(x,L.y,L.dir,id,S.grid,S.stamp,S.depth);
   S.landed.push({x,y:L.y,dir:L.dir,line:L.idx});
   drawDent(actx,{x,y:L.y,dir:L.dir,line:L.idx});
   if(!reduce) S.flash={x,y:L.y,t:now};
@@ -386,9 +428,9 @@ const acc=document.createElement("canvas"), actx=acc.getContext("2d");
 let DPR=1, TW=400, view;
 function setView(){
   const W=tc.width, pad=0.06*W;
-  const wx=Z.Lx+2*Z.m, wy=Z.Ly+2*Math.max(K.ext,0.01)+0.04;
+  const ry=Math.max(K.r,0.01,K.R*0.6), wx=Z.Lx+2*Z.m, wy=Z.Ly+2*ry+0.04;
   const sc_=Math.min((W-2*pad)/wx,(W-2*pad)/wy);
-  view={sc:sc_, ox:pad+((W-2*pad)-wx*sc_)/2+Z.m*sc_, oy:pad+((W-2*pad)-wy*sc_)/2+(Math.max(K.ext,0.01)+0.02)*sc_};
+  view={sc:sc_, ox:pad+((W-2*pad)-wx*sc_)/2+Z.m*sc_, oy:pad+((W-2*pad)-wy*sc_)/2+(ry+0.02)*sc_};
 }
 const X=x=>view.ox+x*view.sc, Y=y=>view.oy+y*view.sc;
 const LCOL=[[31,90,150],[46,139,87],[138,91,184],[212,98,28],[30,130,160],[180,60,90]];
@@ -530,14 +572,75 @@ function poissonDraw(mu){ if(mu<30){ const L=Math.exp(-mu); let k=0,p=1; do{k++;
 function randomMap(){
   RG=new Uint16Array(Z.NX*Z.NY); const st=new Int32Array(Z.NX*Z.NY).fill(-1);
   if(K.mode!=="none"){
-    const e=K.ext, wx=Z.Lx+2*e, wy=Z.Ly+2*e, dens=P.N/(K.s*P.p), N=poissonDraw(dens*wx*wy);
-    for(let i=0;i<N;i++) rasterize(-e+Math.random()*wx,-e+Math.random()*wy,Math.random()<.5?1:-1,i,RG,st);
+    const e=K.ext, ey=K.r, wx=Z.Lx+2*e, wy=Z.Ly+2*ey, dens=P.N/(K.s*P.p), N=poissonDraw(dens*wx*wy);
+    for(let i=0;i<N;i++) rasterize(-e+Math.random()*wx,-ey+Math.random()*wy,Math.random()<.5?1:-1,i,RG,st);
   }
   rc.width=Z.NX; rc.height=Z.NY; rc.style.aspectRatio=Z.NX+"/"+Z.NY;
   const img=rx.createImageData(Z.NX,Z.NY), d=img.data;
   for(let i=0;i<RG.length;i++){ const c=PAL[Math.min(RG[i],TOP)], k=i*4; d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; }
   rx.putImageData(img,0,0); fillCmp("r",gstats(RG));
 }
+/* ---------- depth map and profiles ---------- */
+const dc=document.getElementById("depth"), dxc=dc.getContext("2d");
+function turbo(t){ t=Math.max(0,Math.min(1,t)); // Turbo rainbow colormap (polynomial approximation)
+  const r=0.13572138+t*(4.61539260+t*(-42.66032258+t*(132.13108234+t*(-152.94239396+t*59.28637943))));
+  const g=0.09140261+t*(2.19418839+t*(4.84296658+t*(-14.18503333+t*(4.27729857+t*2.82956604))));
+  const b=0.10667330+t*(12.64194608+t*(-60.58204836+t*(110.36276771+t*(-89.90310912+t*27.34824973))));
+  return [r,g,b].map(v=>Math.round(255*Math.max(0,Math.min(1,v)))); }
+function dcol(t){ return t<=0 ? [225,229,234] : turbo(0.04+0.96*t); }
+let PF={ix:null,iy:null};
+function nearestLineRow(yt){ let yl=yt, best=1e9; for(const L of Z.lines){ if(L.pass!==0) continue; const d=Math.abs(L.y-yt); if(d<best){best=d; yl=L.y;} }
+  return Math.max(0,Math.min(Z.NY-1,Math.floor(yl/Z.cellY))); }
+function profRows(){ // user-selected profile lines (default: mid-zone across, tool path closest to mid-zone along)
+  if(PF.ix===null||PF.ix>=Z.NX) PF.ix=Math.floor(Z.NX/2);
+  if(PF.iy===null||PF.iy>=Z.NY) PF.iy=nearestLineRow(Z.Ly/2);
+  const a=document.getElementById("pfx"), b=document.getElementById("pfy");
+  a.max=Z.NX-1; b.max=Z.NY-1; a.value=PF.ix; b.value=PF.iy;
+  document.getElementById("pfxo").textContent=nf((PF.ix+.5)*Z.cell,3)+" mm";
+  document.getElementById("pfyo").textContent=nf((PF.iy+.5)*Z.cellY,3)+" mm";
+  return {ixMid:PF.ix,iyLine:PF.iy}; }
+function drawDepth(){
+  const D=S.depth, n=D.length, hm=Math.max(K.hmax,1e-6);
+  dc.width=Z.NX; dc.height=Z.NY; dc.style.aspectRatio=Z.NX+"/"+Z.NY;
+  const img=dxc.createImageData(Z.NX,Z.NY), d=img.data; let mx=0,sum=0,mnC=1e9,cov=0;
+  for(let i=0;i<n;i++){ const v=D[i], c=dcol(v/hm), k=i*4; d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; if(v>mx)mx=v; sum+=v; if(v>0){ cov++; if(v<mnC)mnC=v; } }
+  dxc.putImageData(img,0,0);
+  const {ixMid,iyLine}=profRows();
+  for(let y=0;y<Z.NY;y+=6){ dxc.fillStyle="#ffffff"; dxc.fillRect(ixMid-1,y,3,4); dxc.fillStyle="#000000"; dxc.fillRect(ixMid,y,1,4); }
+  for(let x=0;x<Z.NX;x+=6){ dxc.fillStyle="#ffffff"; dxc.fillRect(x,iyLine-1,4,3); dxc.fillStyle="#000000"; dxc.fillRect(x,iyLine,4,1); }
+  const um=v=>nf(v*1000,1)+" µm";
+  document.getElementById("dMax").textContent=um(mx);
+  document.getElementById("dMean").textContent=um(sum/n);
+  document.getElementById("dMin").textContent=cov<n?"0 µm (untreated points)":um(mnC);
+  document.getElementById("dPV").textContent=cov?um(cov<n?mx:mx-mnC)+(cov<n?" (gaps)":""):"–";
+  const R=K.R, ridge=e=>R-Math.sqrt(Math.max(0,R*R-(e/2)*(e/2)));
+  const ry=ridge(P.p), rxv=ridge(K.s);
+  document.getElementById("dRy").textContent=K.hmax>0?(ry<K.hmax?um(ry):"gap (p too large)"):"–";
+  document.getElementById("dRx").textContent=K.hmax>0?(rxv<K.hmax?um(rxv):"gap (s too large)"):"–";
+  document.getElementById("dmaxl").textContent=nf(hm*1000,0)+" µm";
+  document.getElementById("dramp").style.background="linear-gradient(90deg,"+[0.001,.1,.2,.3,.4,.5,.6,.7,.8,.9,1].map(t=>"rgb("+dcol(t).join(",")+")").join(",")+")";
+  const tk=document.getElementById("dticks"); tk.innerHTML="";
+  for(let i=0;i<=5;i++){ const sp=document.createElement("span"); sp.textContent=nf(hm*1000*i/5,hm*1000<20?1:0); tk.appendChild(sp); }
+  // profiles
+  const py=[], px=[]; for(let iy=0;iy<Z.NY;iy++) py.push([(iy+.5)*Z.cellY, D[iy*Z.NX+ixMid]]);
+  for(let ix=0;ix<Z.NX;ix++) px.push([(ix+.5)*Z.cell, D[iyLine*Z.NX+ix]]);
+  drawProfile("profY",py,Z.Ly,"vertical line: across the feed, y (mm), at x = "+nf((ixMid+.5)*Z.cell,2)+" mm");
+  drawProfile("profX",px,Z.Lx,"horizontal line: along the feed, x (mm), at y = "+nf((iyLine+.5)*Z.cellY,2)+" mm");
+}
+function drawProfile(id,pts,len,label){
+  const svg=document.getElementById(id); svg.innerHTML="";
+  const L=56,R=12,T=12,B=34,W=560,H=200, dmax=Math.max(K.hmax*1000,1)*1.1;
+  const x=v=>L+(W-L-R)*v/len, y=v=>T+(H-T-B)*(v/dmax);
+  for(const v of [0,dmax/1.1/2,dmax/1.1]){ el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:css("--line")},svg); el("text",{x:L-6,y:y(v)+4,"text-anchor":"end"},svg).textContent=nf(v,0)+" µm"; }
+  const st=niceStep(len/5); for(let v=0;v<=len+1e-9;v+=st) el("text",{x:x(v),y:H-B+15,"text-anchor":"middle"},svg).textContent=nf(v,st<1?1:0);
+  el("text",{x:(L+W-R)/2,y:H-4,"text-anchor":"middle"},svg).textContent=label;
+  const yb=y(dmax); let dPath="M"+x(0)+","+yb; for(const [p,v] of pts) dPath+="L"+x(p).toFixed(1)+","+y(v*1000).toFixed(1); dPath+="L"+x(len)+","+yb+"Z";
+  el("path",{d:dPath,fill:"#9aa6b3","fill-opacity":.55,stroke:"none"},svg);
+  let l=""; pts.forEach(([p,v],i)=>{ l+=(i?"L":"M")+x(p).toFixed(1)+","+y(v*1000).toFixed(1); });
+  el("path",{d:l,fill:"none",stroke:css("--accent"),"stroke-width":2},svg);
+  el("line",{x1:L,x2:W-R,y1:y(0),y2:y(0),stroke:css("--ink"),"stroke-width":1.2},svg);
+}
+
 function drawHeat(){
   hc.width=Z.NX; hc.height=Z.NY; hc.style.aspectRatio=Z.NX+"/"+Z.NY;
   const img=hx.createImageData(Z.NX,Z.NY), d=img.data, hist=new Float64Array(TOP+1); let sum=0,mx=0,mn=1e9;
@@ -637,7 +740,7 @@ function updatePhase(){
   if(K.mode==="none") h="The tool never touches the surface with these settings.";
   else if(S.line>=nL) h=`Done: <b>${nf(100*S.covered/S.grid.length,1)} %</b> of the measured zone covered after ${P.N} pass${P.N>1?"es":""} (${S.count} impacts).`;
   else if(!S.playing && S.line===0 && S.u===0) h="Press <b>Play</b>: the tool travels along the lines while the actuator hammers the surface at f. Dents appear every s = V/f.";
-  else { const L=Z.lines[S.line]; h=`Pass ${L.pass+1}, line ${(S.line%perPass)+1} of ${perPass}: moving ${L.dir>0?"→":"←"} at ${nf(P.V,0)} mm/min, one impact every ${fmtLen(K.s)}.`; }
+  else { const L=Z.lines[S.line]; h=`Pass ${L.pass+1}, line ${(S.line%perPass)+1} of ${perPass}: moving ${L.dir>0?"→":"←"} at ${nf(P.V,1)} mm/s (${nf(P.V*60,0)} mm/min), one impact every ${fmtLen(K.s)}.`; }
   if(h!==lastPhase){ document.getElementById("phase").innerHTML=h; lastPhase=h; }
   document.getElementById("rLines").textContent=Math.min(S.line,nL)+" / "+nL;
   document.getElementById("rImp").textContent=S.count;
@@ -661,7 +764,7 @@ function tick(now){
     if(S.u>=1) finishLine(now);
     else { const x=L.xs+(L.xe-L.xs)*S.u; while(S.idx<L.imp.length && (L.imp[S.idx]-x)*L.dir<=0) land(L,L.imp[S.idx++],now); }
   }
-  if(S.dirty && (++S.frame%4===0)){ drawHeat(); bareDirty=true; S.dirty=false; }
+  if(S.dirty && (++S.frame%4===0)){ drawHeat(); drawDepth(); bareDirty=true; S.dirty=false; }
   drawTop(now); drawSide(); updatePhase();
   requestAnimationFrame(tick);
 }
@@ -670,13 +773,13 @@ function tick(now){
 const playBtn=document.getElementById("play");
 function setPlay(){ playBtn.textContent=S.playing?"❚❚ Pause":(S.line>=Z.lines.length?"↻ Replay":"▶ Play"); }
 function restart(keep){
-  derive(); build(); resetState(); resize(); buildPal(); drawHeat(); randomMap(); bareDirty=true;
+  derive(); build(); resetState(); PF={ix:null,iy:null}; resize(); buildPal(); drawHeat(); drawDepth(); randomMap(); bareDirty=true;
   fillKin(); drawPChart(computeCurve()); lastPhase="";
   S.playing=!!keep; setPlay();
 }
 playBtn.onclick=()=>{ flush(); if(S.line>=Z.lines.length) restart(false); S.playing=!S.playing; S.stopAtEnd=false; setPlay(); };
 document.getElementById("step").onclick=()=>{ flush(); if(S.line>=Z.lines.length) restart(false); S.playing=true; S.stopAtEnd=true; setPlay(); };
-document.getElementById("all").onclick=()=>{ flush(); const now=performance.now(); if(S.line>=Z.lines.length) restart(false); S.stopAtEnd=false; while(S.line<Z.lines.length) finishLine(now); S.playing=false; setPlay(); drawHeat(); bareDirty=true; };
+document.getElementById("all").onclick=()=>{ flush(); const now=performance.now(); if(S.line>=Z.lines.length) restart(false); S.stopAtEnd=false; while(S.line<Z.lines.length) finishLine(now); S.playing=false; setPlay(); drawHeat(); drawDepth(); bareDirty=true; };
 document.getElementById("reset").onclick=()=>restart(S.playing);
 document.getElementById("bare").onchange=()=>{ bareDirty=true; };
 document.getElementById("defaults").onclick=()=>{ Object.assign(P,DEF); for(const s of SPEC) sync(s); restart(false); };
@@ -684,6 +787,13 @@ hc.addEventListener("mousemove",e=>{ const b=hc.getBoundingClientRect(); const i
   if(ix<0||iy<0||ix>=Z.NX||iy>=Z.NY) return; const v=S.grid[iy*Z.NX+ix];
   document.getElementById("hover").textContent=`Point (${nf((ix+.5)*Z.cell,3)} mm, ${nf((iy+.5)*Z.cellY,3)} mm): hit ${v} time${v===1?"":"s"}`+(v===0?" (never hit)":""); });
 document.getElementById("redraw").onclick=()=>randomMap();
+document.getElementById("pfx").addEventListener("input",e=>{ PF.ix=+e.target.value; drawDepth(); });
+document.getElementById("pfy").addEventListener("input",e=>{ PF.iy=+e.target.value; drawDepth(); });
+document.getElementById("pfline").onclick=()=>{ PF.iy=nearestLineRow((PF.iy+.5)*Z.cellY); drawDepth(); };
+dc.addEventListener("click",e=>{ const b=dc.getBoundingClientRect(); PF.ix=Math.max(0,Math.min(Z.NX-1,Math.floor((e.clientX-b.left)/b.width*Z.NX))); PF.iy=Math.max(0,Math.min(Z.NY-1,Math.floor((e.clientY-b.top)/b.height*Z.NY))); drawDepth(); });
+dc.addEventListener("mousemove",e=>{ const b=dc.getBoundingClientRect(); const ix=Math.floor((e.clientX-b.left)/b.width*Z.NX), iy=Math.floor((e.clientY-b.top)/b.height*Z.NY);
+  if(ix<0||iy<0||ix>=Z.NX||iy>=Z.NY) return; const v=S.depth[iy*Z.NX+ix];
+  document.getElementById("dhover").textContent=`Point (${nf((ix+.5)*Z.cell,3)} mm, ${nf((iy+.5)*Z.cellY,3)} mm): depth ${nf(v*1000,1)} µm`+(v===0?" (untreated)":""); });
 rc.addEventListener("mousemove",e=>{ if(!RG) return; const b=rc.getBoundingClientRect(); const ix=Math.floor((e.clientX-b.left)/b.width*Z.NX), iy=Math.floor((e.clientY-b.top)/b.height*Z.NY);
   if(ix<0||iy<0||ix>=Z.NX||iy>=Z.NY) return; const v=RG[iy*Z.NX+ix];
   document.getElementById("rhover").textContent=`Point (${nf((ix+.5)*Z.cell,3)} mm, ${nf((iy+.5)*Z.cellY,3)} mm): hit ${v} time${v===1?"":"s"}`+(v===0?" (never hit)":""); });
