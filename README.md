@@ -16,6 +16,7 @@ at the feed velocity *V_feed*.
 - Impact spacing, dent radius, dent length / width / aspect ratio, contact time
 - Impact velocity (normal, tangential, resultant) and impact angle
 - Map of how many times each point is hit, and its histogram
+- Animated map of the final dent depth (deepest trace kept), with a rainbow depth scale and user-selected depth profiles across and along the feed and the theoretical ridge and scallop heights
 - Share of the surface at 0 %, 100 %, 200 % and ≥ 300 % local coverage
 - Comparison with a random process (shot peening) with the same mean number of hits
 - One-pass coverage versus step-over, with the gap-free limit
