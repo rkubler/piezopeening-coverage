@@ -6,7 +6,7 @@
 Interactive educational tool showing how surface coverage builds up in
 **piezopeening**: a spherical tool driven by a piezoelectric actuator hammers
 the surface at frequency *f* while a CNC machine moves it along straight lines
-at the feed velocity *V_feed*.
+at the feed velocity *V_feed*. 
 
 **▶ Live simulator:** https://rkubler.github.io/piezopeening-coverage/
 
