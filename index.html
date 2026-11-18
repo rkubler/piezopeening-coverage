@@ -112,7 +112,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 <div class="wrap">
 <header class="hero">
 <div class="htext">
-  <p class="byline"><b>Dr Régis Kubler</b>, Arts et Métiers Institute of Technology · Developed with the assistance of Claude Opus 5.5 (Anthropic), October 2026 · <b>Version 1.9 (18 November 2026)</b></p>
+  <p class="byline"><b>Dr Régis Kubler</b>, Arts et Métiers Institute of Technology · Developed with the assistance of Claude Opus 5.5 (Anthropic), October 2026 · <b>Version 2.0 (18 November 2026)</b></p>
   <h1>Piezopeening Coverage Simulator</h1>
   <p>A piezoelectric actuator drives a spherical tool up and down at frequency f while the CNC machine moves it along straight lines at the feed velocity V<sub>feed</sub>. The tool tip penetration follows <span class="formula">h(t) = U<sub>off</sub> + a·sin(2πf·t)</span>; each time h &gt; 0 the sphere indents the surface. The page traces every dent, counts how many times each point is hit and measures the coverage.</p>
 </div>
@@ -238,6 +238,25 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="read th"><div class="k">Scallop between impacts (theory)</div><div class="v" id="dRx">–</div></div>
     </div>
     <p class="note">Each point keeps the deepest trace of the sphere over all impacts: depth = max over impacts of [h − (R − √(R² − d²))], d = distance to the tool axis. Theoretical ridge height between neighbouring traces at spacing e: R − √(R² − (e/2)²), with e = p across the feed and e = s along it (tool travel during contact neglected). Kinematic model: no elastic recovery or pile-up.</p>
+  </section>
+</div>
+
+<div class="grid">
+  <section class="panel" aria-label="2D roughness">
+    <h2>2D roughness of the profiles (ISO 4287)</h2>
+    <table class="cmp" id="rough2d">
+      <thead><tr><th>Parameter</th><th>Across feed<br>line at x</th><th>Along feed<br>line at y</th><th>Across feed<br>zone mean</th><th>Along feed<br>zone mean</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="note">Heights z = − depth, measured from the initial surface and referred to the mean line of each profile. “Line at x / y” are the two profile lines of the depth map (move them with the sliders or by clicking on the map); “zone mean” averages the parameter over all the parallel profiles of the measured zone. Ra = mean |z|; Rq = √(mean z²); Rp, Rv = highest peak and deepest valley; Rt = Rp + Rv; Rz = mean of the peak-to-valley heights of 5 equal sampling lengths; Rsk = mean z³ / Rq³; Rku = mean z⁴ / Rq⁴; RSm = mean spacing of the profile elements (between successive up-crossings of the mean line). The profiles are not filtered (no λc cut-off, the zone is only a few mm long): strictly these are the primary-profile parameters Pa, Pq…, which coincide with the R parameters when the waviness is negligible.</p>
+  </section>
+  <section class="panel" aria-label="3D roughness">
+    <h2>3D areal roughness of the zone (ISO 25178)</h2>
+    <table class="cmp" id="rough3d">
+      <thead><tr><th>Parameter</th><th>Meaning</th><th>Value</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="note">Computed on the whole measured zone (the depth map), heights referred to the mean plane, no filter. Sa = mean |z|; Sq = √(mean z²); Ssk = mean z³ / Sq³ (negative: deep valleys, plateau-like surface; positive: sharp peaks); Sku = mean z⁴ / Sq⁴ (3 for a Gaussian surface; &gt; 3 sharp features, &lt; 3 bumpy, regular surface); Sp, Sv = highest peak and deepest valley; Sz = Sp + Sv; Sdq = root-mean-square slope; Sdr = extra area of the surface compared with the flat zone. Model surface: rigid sphere traces, no elastic recovery, pile-up or material flow, so real values will differ, especially Sp, Sz and Sku.</p>
   </section>
 </div>
 
@@ -614,6 +633,41 @@ function profRows(){ // user-selected profile lines (default: mid-zone across, t
   document.getElementById("pfxo").textContent=nf((PF.ix+.5)*Z.cell,3)+" mm";
   document.getElementById("pfyo").textContent=nf((PF.iy+.5)*Z.cellY,3)+" mm";
   return {ixMid:PF.ix,iyLine:PF.iy}; }
+/* ---------- roughness (heights z = -depth, in µm) ---------- */
+function rough1D(z){ // z: array of heights (µm), equally spaced with step dx (mm)
+  const n=z.length; if(n<5) return null; let m=0; for(const v of z) m+=v; m/=n;
+  let a=0,q=0,s3=0,s4=0,p=-1e9,v=1e9; for(const w of z){ const d=w-m; a+=Math.abs(d); q+=d*d; s3+=d*d*d; s4+=d*d*d*d; if(d>p)p=d; if(d<v)v=d; }
+  a/=n; q=Math.sqrt(q/n); const sk=q>1e-9?s3/n/(q*q*q):0, ku=q>1e-9?s4/n/(q*q*q*q):0;
+  let rz=0; for(let k=0;k<5;k++){ const i0=Math.floor(k*n/5), i1=Math.floor((k+1)*n/5); let hi=-1e9,lo=1e9; for(let i=i0;i<i1;i++){ if(z[i]>hi)hi=z[i]; if(z[i]<lo)lo=z[i]; } rz+=hi-lo; } rz/=5;
+  const up=[]; const eps=0.005*q; let st=0; for(let i=0;i<n;i++){ const d=z[i]-m; if(d<-eps) st=-1; else if(d>eps){ if(st===-1) up.push(i); st=1; } }
+  const sm=up.length>=2?(up[up.length-1]-up[0])/(up.length-1):NaN;
+  return {a,q,p,v:-v,t:p-v,z:rz,sk,ku,sm};
+}
+function roughAll(){
+  const D=S.depth, NX=Z.NX, NY=Z.NY, um=1000;
+  const col=ix=>{ const a=new Array(NY); for(let iy=0;iy<NY;iy++) a[iy]=-D[iy*NX+ix]*um; return a; };
+  const row=iy=>{ const a=new Array(NX); for(let ix=0;ix<NX;ix++) a[ix]=-D[iy*NX+ix]*um; return a; };
+  const mean=list=>{ const o={}; const ks=Object.keys(list[0]); for(const k of ks){ let s=0,c=0; for(const r of list) if(isFinite(r[k])){ s+=r[k]; c++; } o[k]=c?s/c:NaN; } return o; };
+  const {ixMid,iyLine}=profRows();
+  const cx=rough1D(col(ixMid)), rx=rough1D(row(iyLine));
+  const cols=[], rows=[]; for(let ix=0;ix<NX;ix++) cols.push(rough1D(col(ix))); for(let iy=0;iy<NY;iy++) rows.push(rough1D(row(iy)));
+  const cm=mean(cols), rm=mean(rows);
+  // spacings in mm
+  for(const o of [cx,cm]) o.sm*=Z.cellY; for(const o of [rx,rm]) o.sm*=Z.cell;
+  // 3D
+  const n=NX*NY; let m=0; for(let i=0;i<n;i++) m-=D[i]; m=m/n*um;
+  let a=0,q=0,s3=0,s4=0,p=-1e9,v=1e9; for(let i=0;i<n;i++){ const d=-D[i]*um-m; a+=Math.abs(d); q+=d*d; s3+=d*d*d; s4+=d*d*d*d; if(d>p)p=d; if(d<v)v=d; }
+  a/=n; q=Math.sqrt(q/n);
+  let g2=0, dr=0, ng=0; for(let iy=0;iy<NY-1;iy++) for(let ix=0;ix<NX-1;ix++){ const i=iy*NX+ix, gx=(D[i]-D[i+1])/Z.cell, gy=(D[i]-D[i+NX])/Z.cellY, gg=gx*gx+gy*gy; g2+=gg; dr+=Math.sqrt(1+gg)-1; ng++; }
+  const s3d={a,q,sk:q>1e-9?s3/n/(q*q*q):0,ku:q>1e-9?s4/n/(q*q*q*q):0,p,v:-v,z:p-v,dq:Math.sqrt(g2/Math.max(1,ng)),dr:100*dr/Math.max(1,ng)};
+  return {cx,rx,cm,rm,s3d};
+}
+function drawRough(){
+  const R=roughAll(), f=(v,d)=>isFinite(v)?nf(v,d):"–", L=[["Ra","a","µm",2],["Rq","q","µm",2],["Rp","p","µm",1],["Rv","v","µm",1],["Rt","t","µm",1],["Rz","z","µm",1],["Rsk","sk","",2],["Rku","ku","",2],["RSm","sm","mm",3]];
+  document.querySelector("#rough2d tbody").innerHTML=L.map(([lab,k,u,d])=>`<tr><td>${lab}${u?" ("+u+")":""}</td>${[R.cx,R.rx,R.cm,R.rm].map(o=>"<td>"+f(o[k],d)+"</td>").join("")}</tr>`).join("");
+  const s=R.s3d, T=[["Sa","arithmetical mean height",f(s.a,2)+" µm"],["Sq","root-mean-square height",f(s.q,2)+" µm"],["Ssk","skewness",f(s.sk,2)],["Sku","kurtosis",f(s.ku,2)],["Sp","maximum peak height",f(s.p,1)+" µm"],["Sv","maximum pit depth",f(s.v,1)+" µm"],["Sz","maximum height Sp + Sv",f(s.z,1)+" µm"],["Sdq","root-mean-square gradient",f(s.dq,3)],["Sdr","developed interfacial area ratio",f(s.dr,2)+" %"]];
+  document.querySelector("#rough3d tbody").innerHTML=T.map(r=>`<tr><td>${r[0]}</td><td style="text-align:left;font-family:var(--f-body)">${r[1]}</td><td>${r[2]}</td></tr>`).join("");
+}
 function drawDepth(){
   const D=S.depth, n=D.length, hm=Math.max(K.hmax,1e-6);
   dc.width=Z.NX; dc.height=Z.NY; dc.style.aspectRatio=Z.NX+"/"+Z.NY;
@@ -636,6 +690,7 @@ function drawDepth(){
   document.getElementById("dramp").style.background="linear-gradient(90deg,"+[0.001,.1,.2,.3,.4,.5,.6,.7,.8,.9,1].map(t=>"rgb("+dcol(t).join(",")+")").join(",")+")";
   const tk=document.getElementById("dticks"); tk.innerHTML="";
   for(let i=0;i<=5;i++){ const sp=document.createElement("span"); sp.textContent=nf(hm*1000*i/5,hm*1000<20?1:0); tk.appendChild(sp); }
+  drawRough();
   // profiles
   const py=[], px=[]; for(let iy=0;iy<Z.NY;iy++) py.push([(iy+.5)*Z.cellY, D[iy*Z.NX+ixMid]]);
   for(let ix=0;ix<Z.NX;ix++) px.push([(ix+.5)*Z.cell, D[iyLine*Z.NX+ix]]);

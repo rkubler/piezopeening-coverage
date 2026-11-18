@@ -41,6 +41,8 @@ between lines, tool path, number of passes and offset between passes.
 
 The base time t_b is the time needed to dent 98 % of the measured zone, counted in lines travelled. Full coverage (100 %) is 1.25 × t_b (an option sets it to t_b). The readout "Coverage (NF L 06-832)" combines both: it is the dented area up to the base time t_b (98 %), goes from 98 % to 100 % between t_b and 1.25·t_b, and is 100·t / (1.25·t_b) above (200 % = twice the time of full coverage).
 
+Version 2.0 (18 November 2026): 2D roughness of the profiles (Ra, Rq, Rp, Rv, Rt, Rz, Rsk, Rku, RSm, ISO 4287) across and along the feed, and 3D areal roughness of the zone (Sa, Sq, Ssk, Sku, Sp, Sv, Sz, Sdq, Sdr, ISO 25178), computed on the simulated depth map without filtering.
+
 Version 1.9 (18 November 2026): new readouts "Base time" and "Coverage (NF L 06-832)", which can exceed 100 %; option for the 1.25 factor.
 
 Version 1.8 (18 November 2026): the equivalent coverage level and the 1.25 option are removed; coverage is the dented area divided by the total area.
