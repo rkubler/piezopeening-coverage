@@ -3,6 +3,8 @@
 **Dr Régis Kubler**, Arts et Métiers Institute of Technology
 *Developed with the assistance of Claude Opus 5.5 (Anthropic), October 2026*
 
+**User guide (PDF):** [piezopeening_simulator_guide.pdf](docs/piezopeening_simulator_guide.pdf), online at https://rkubler.github.io/piezopeening-coverage/docs/piezopeening_simulator_guide.pdf. LaTeX sources in [`docs/`](docs/).
+
 ![Piezopeening hammering process (depths not to scale)](piezopeening_hammering.gif)
 
 Interactive educational tool showing how surface coverage builds up in

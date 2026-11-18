@@ -1,0 +1,20 @@
+\paragraph{The readout \ui{Coverage (NF L 06-832)}.} Coverage is the dented area divided by the total area as long as it can be measured, i.e.\ up to 98\,\%. Beyond, NF~L~06-832 counts time. The page combines both in one value, $C(t)$, continuous and increasing:
+\begin{equation}
+C(t)=\begin{cases}
+\text{dented area (\%)} & t\le t_b\quad(\text{reaches }98\,\%\text{ at }t_b)\\[2pt]
+98+2\,\dfrac{t/t_b-1}{0.25} & t_b<t\le1.25\,t_b\quad(98\to100\,\%)\\[6pt]
+100\,\dfrac{t}{1.25\,t_b} & t>1.25\,t_b
+\end{cases}
+\end{equation}
+With the option \ui{Full coverage (100\,\%) = base time}, the middle interval disappears: $C=100\,t/t_b$ after the base time. The number of passes (or the time) for a specified coverage $C$ is the inverse of this function: below 98\,\% it comes from the dented area, above 100\,\% it is $\frac{C}{100}\times1.25\,t_b$.
+
+\begin{center}\small
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+Passes $n$ (reference case, $K=0.337$) & 1 & 3 & 6 & 11.6 ($t_b$) & 13.0 & 14.5 & 29.0\\ \midrule
+Dented area (\%) & 28.6 & 63.6 & 86.8 & 98.0 & 98.8 & 99.25 & 99.99\\
+Coverage (NF L 06-832) (\%) & 28.6 & 63.6 & 86.8 & 98 & 99 & 100 & 200\\ \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Local coverage of a point.} On the flat-part and cylinder simulators the same rule is applied to each point, with time replaced by the number of impacts it has received (proportional to time on an even treatment): $C(x,y)=1-e^{-\lambda}$ up to $\lambda=\ln50=3.91$ (98\,\%), then 98 to 100\,\% up to $\lambda=1.25\ln50=4.89$, and $100\,\lambda/4.89$ above. The hover readout gives it, and the map can show it (\ui{Map shows: coverage NF L 06-832}).
