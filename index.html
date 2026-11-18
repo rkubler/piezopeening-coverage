@@ -112,7 +112,7 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 <div class="wrap">
 <header class="hero">
 <div class="htext">
-  <p class="byline"><b>Dr Régis Kubler</b>, Arts et Métiers Institute of Technology · Developed with the assistance of Claude Opus 5.5 (Anthropic), October 2026 · <b>Version 1.6 (11 October 2026)</b></p>
+  <p class="byline"><b>Dr Régis Kubler</b>, Arts et Métiers Institute of Technology · Developed with the assistance of Claude Opus 5.5 (Anthropic), October 2026 · <b>Version 1.9 (18 November 2026)</b></p>
   <h1>Piezopeening Coverage Simulator</h1>
   <p>A piezoelectric actuator drives a spherical tool up and down at frequency f while the CNC machine moves it along straight lines at the feed velocity V<sub>feed</sub>. The tool tip penetration follows <span class="formula">h(t) = U<sub>off</sub> + a·sin(2πf·t)</span>; each time h &gt; 0 the sphere indents the surface. The page traces every dent, counts how many times each point is hit and measures the coverage.</p>
 </div>
@@ -145,7 +145,10 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
       <div class="read"><div class="k">Impacts made</div><div class="v" id="rImp">0</div></div>
       <div class="read hl"><div class="k">Measured coverage</div><div class="v" id="rCov">0 %</div></div>
       <div class="read th"><div class="k">Predicted coverage (1 pass, lattice)</div><div class="v" id="rCovTh">–</div></div>
+      <div class="read"><div class="k">Base time t<sub>b</sub> (98 % dented)</div><div class="v" id="rTb">–</div></div>
+      <div class="read hl"><div class="k">Coverage (NF L 06-832), can exceed 100 %</div><div class="v" id="rNF">0 %</div></div>
     </div>
+    <p class="note">Coverage (NF L 06-832): the dented area up to the base time t<sub>b</sub> (time to dent 98 % of the measured zone); from 98 % to 100 % between t<sub>b</sub> and 1.25·t<sub>b</sub> (full coverage); 100·t / (1.25·t<sub>b</sub>) above, so 200 % is twice the time of full coverage. Time is counted in lines travelled (all lines have the same length).</p>
   </section>
 
   <section class="panel" aria-label="Tool kinematics">
@@ -303,7 +306,9 @@ footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);paddin
 (function(){
 "use strict";
 /* ---------- parameters ---------- */
-const DEF={Dt:3, f:100, a:40, U:20, eta:1, V:16.7, p:0.8, phi:0, path:"zigzag", N:1, poff:"none"};
+const DEF={Dt:3, f:100, a:40, U:20, eta:1, V:16.7, p:0.8, phi:0, path:"zigzag", N:1, poff:"none", ffac:"125"};
+const FF=()=>P.ffac==="125"?1.25:1; // NF L 06-832: full coverage = FF × base time (98 %)
+function nfCov(x,area){ const F=FF(); if(x<=1) return area; if(F>1&&x<=F) return 98+2*(x-1)/(F-1); return 100*x/F; }
 const SPEC=[
  {k:"Dt",  lab:"Tool diameter D", u:"mm",    min:0.5, max:20,   step:0.1, d:1},
  {k:"f",   lab:"Impact frequency f", u:"Hz", min:1,   max:500,  step:1,   d:0},
@@ -315,7 +320,8 @@ const SPEC=[
  {k:"phi", lab:"Phase shift between lines", u:"°", min:0, max:360, step:5, d:0},
  {k:"N",   lab:"Number of passes", u:"–", min:1, max:10, step:1, d:0},
  {k:"path",lab:"Tool path", sel:[["zigzag","Zigzag (back and forth)"],["oneway","One way (same direction)"]]},
- {k:"poff",lab:"Offset between passes", sel:[["none","None (same path)"],["half","Half pitch (p/2 and s/2)"]]}
+ {k:"poff",lab:"Offset between passes", sel:[["none","None (same path)"],["half","Half pitch (p/2 and s/2)"]]},
+ {k:"ffac",lab:"Full coverage (100 %), NF L 06-832", sel:[["125","1.25 × base time"],["100","= base time (98 % dented)"]]},
 ];
 const P=Object.assign({},DEF);
 const reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -403,7 +409,7 @@ function build(){
 /* ---------- state ---------- */
 const S={line:0,u:0,idx:0,playing:false,stopAtEnd:false,landed:[],count:0,grid:null,stamp:null,covered:0,dirty:false,frame:0};
 function resetState(){
-  S.line=0;S.u=0;S.idx=0;S.landed=[];S.count=0;S.covered=0;S.stopAtEnd=false;
+  S.line=0;S.u=0;S.idx=0;S.landed=[];S.count=0;S.covered=0;S.stopAtEnd=false;S.hist=[0];
   S.grid=new Uint16Array(Z.NX*Z.NY); S.stamp=new Int32Array(Z.NX*Z.NY).fill(-1); S.depth=new Float32Array(Z.NX*Z.NY);
 }
 function rasterize(x0,y0,dir,id,grid,stamp,depth){
@@ -742,24 +748,28 @@ function fillKin(){
   document.getElementById("c5").textContent=K.r>0?"p ≤ "+fmtLen(pg):"–";
   const rate=K.V*P.p; document.getElementById("c6").textContent=nf(rate,1)+" mm²/s · "+(100/rate>=60?nf(100/rate/60,1)+" min":nf(100/rate,1)+" s")+"/cm²";
 }
+// base time in lines: first time the measured zone is 98 % dented (linear within a line, impacts are laid one after the other)
+function baseLines(){ const h=S.hist; for(let k=1;k<h.length;k++) if(h[k]>=0.98) return k-1+(0.98-h[k-1])/Math.max(1e-12,h[k]-h[k-1]); return Infinity; }
 let lastPhase="";
 function updatePhase(){
   let h;
-  const nL=Z.lines.length, perPass=nL/P.N;
+  const nL=Z.lines.length, perPass=nL/P.N, area=100*S.covered/S.grid.length, tb=baseLines(), xb=isFinite(tb)?(S.line+(S.line<nL?S.u:0))/tb:0, cnf=nfCov(xb,area);
   if(K.mode==="none") h="The tool never touches the surface with these settings.";
-  else if(S.line>=nL) h=`Done: <b>${nf(100*S.covered/S.grid.length,1)} %</b> of the measured zone covered after ${P.N} pass${P.N>1?"es":""} (${S.count} impacts).`;
+  else if(S.line>=nL) h=`Done: <b>${nf(100*S.covered/S.grid.length,1)} %</b> of the measured zone covered after ${P.N} pass${P.N>1?"es":""} (${S.count} impacts). Coverage (NF L 06-832): <b>${nf(cnf,cnf<100?1:0)} %</b>${isFinite(tb)?"":" (98 % not reached)"}.`;
   else if(!S.playing && S.line===0 && S.u===0) h="Press <b>Play</b>: the tool travels along the lines while the actuator hammers the surface at f. Dents appear every s = V/f.";
   else { const L=Z.lines[S.line]; h=`Pass ${L.pass+1}, line ${(S.line%perPass)+1} of ${perPass}: moving ${L.dir>0?"→":"←"} at ${nf(P.V,1)} mm/s (${nf(P.V*60,0)} mm/min), one impact every ${fmtLen(K.s)}.`; }
   if(h!==lastPhase){ document.getElementById("phase").innerHTML=h; lastPhase=h; }
   document.getElementById("rLines").textContent=Math.min(S.line,nL)+" / "+nL;
   document.getElementById("rImp").textContent=S.count;
-  document.getElementById("rCov").textContent=nf(100*S.covered/S.grid.length,1)+" %";
+  document.getElementById("rCov").textContent=nf(area,1)+" %";
+  document.getElementById("rNF").textContent=nf(cnf,cnf<100?1:0)+" %";
+  document.getElementById("rTb").textContent=isFinite(tb)?nf(tb/perPass,2)+" pass"+(tb/perPass>1?"es":"")+" ("+nf(tb,1)+" lines)":(S.line>=nL?"not reached":"–");
 }
 
 /* ---------- loop ---------- */
 function finishLine(now){
   const L=Z.lines[S.line]; while(S.idx<L.imp.length) land(L,L.imp[S.idx++],now);
-  S.line++; S.u=0; S.idx=0;
+  S.line++; S.u=0; S.idx=0; S.hist.push(S.covered/S.grid.length);
   if(S.line>=Z.lines.length){ S.playing=false; setPlay(); }
   else if(S.stopAtEnd){ S.playing=false; S.stopAtEnd=false; setPlay(); }
 }

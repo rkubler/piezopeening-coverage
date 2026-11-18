@@ -3,12 +3,14 @@
 **Dr Régis Kubler**, Arts et Métiers Institute of Technology
 *Developed with the assistance of Claude Opus 5.5 (Anthropic), October 2026*
 
+![Piezopeening hammering process (depths not to scale)](piezopeening_hammering.gif)
+
 Interactive educational tool showing how surface coverage builds up in
 **piezopeening**: a spherical tool driven by a piezoelectric actuator hammers
 the surface at frequency *f* while a CNC machine moves it along straight lines
-at the feed velocity *V_feed*. 
+at the feed velocity *V_feed*.
 
-**▶ Live simulator:** https://rkubler.github.io/piezopeening-coverage/
+**▶ Live simulator:** https://YOUR-USERNAME.github.io/piezopeening-coverage/
 
 ## What the simulator shows
 - Top view of the treated zone: tool path and every dent footprint
@@ -34,6 +36,15 @@ between lines, tool path, number of passes and offset between passes.
 - Mean hits per point per pass: λ = A / (s·p), p = step-over
 - Normal impact velocity: v_n = 2πf·√(a² − U_off²); impact angle from the normal: atan(V_feed / v_n)
 
+
+## Coverage above 100 % (NF L 06-832)
+
+The base time t_b is the time needed to dent 98 % of the measured zone, counted in lines travelled. Full coverage (100 %) is 1.25 × t_b (an option sets it to t_b). The readout "Coverage (NF L 06-832)" combines both: it is the dented area up to the base time t_b (98 %), goes from 98 % to 100 % between t_b and 1.25·t_b, and is 100·t / (1.25·t_b) above (200 % = twice the time of full coverage).
+
+Version 1.9 (18 November 2026): new readouts "Base time" and "Coverage (NF L 06-832)", which can exceed 100 %; option for the 1.25 factor.
+
+Version 1.8 (18 November 2026): the equivalent coverage level and the 1.25 option are removed; coverage is the dented area divided by the total area.
+
 ## Use
 Open the live link above, or download `index.html` and open it in any web
 browser (works offline; no installation needed).
@@ -53,4 +64,4 @@ October 2026. All content was reviewed by the author.
 Code: MIT, see [LICENSE](LICENSE). Documentation: CC BY 4.0.
 
 ## Cite as
-Kubler, R. (2026). *Piezopeening Coverage Simulator*. Arts et Métiers Institute of Technology. Zenodo. DOI: https://doi.org/10.5281/zenodo.23244211
+Kubler, R. (2026). *Piezopeening Coverage Simulator*. Arts et Métiers Institute of Technology. Zenodo. DOI: [to add]
